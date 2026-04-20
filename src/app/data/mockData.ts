@@ -1,0 +1,152 @@
+export const students = [
+  { id: 1, name: 'John Doe', email: 'john.doe@college0.edu', gpa: 3.8, status: 'Good Standing', coursesCompleted: 6, warnings: 0 },
+  { id: 2, name: 'Jane Smith', email: 'jane.smith@college0.edu', gpa: 3.95, status: 'Good Standing', coursesCompleted: 7, warnings: 0 },
+  { id: 3, name: 'Mike Johnson', email: 'mike.j@college0.edu', gpa: 2.5, status: 'Warning', coursesCompleted: 4, warnings: 1 },
+  { id: 4, name: 'Emily Davis', email: 'emily.d@college0.edu', gpa: 3.7, status: 'Good Standing', coursesCompleted: 5, warnings: 0 },
+  { id: 5, name: 'Chris Wilson', email: 'chris.w@college0.edu', gpa: 1.9, status: 'Suspended', coursesCompleted: 3, warnings: 3 },
+  { id: 6, name: 'Sarah Lee', email: 'sarah.lee@college0.edu', gpa: 3.6, status: 'Good Standing', coursesCompleted: 6, warnings: 0 },
+  { id: 7, name: 'David Brown', email: 'david.b@college0.edu', gpa: 3.2, status: 'Good Standing', coursesCompleted: 5, warnings: 0 },
+  { id: 8, name: 'Lisa Anderson', email: 'lisa.a@college0.edu', gpa: 2.3, status: 'Warning', coursesCompleted: 4, warnings: 2 },
+  { id: 9, name: 'Tom Martinez', email: 'tom.m@college0.edu', gpa: 3.9, status: 'Good Standing', coursesCompleted: 7, warnings: 0 },
+  { id: 10, name: 'Anna Taylor', email: 'anna.t@college0.edu', gpa: 3.5, status: 'Good Standing', coursesCompleted: 6, warnings: 0 },
+];
+
+export const courses = [
+  {
+    id: 'CS101',
+    name: 'Introduction to Programming',
+    instructor: 'Dr. Sarah Johnson',
+    time: 'Mon/Wed 9:00-10:30 AM',
+    seats: 30,
+    enrolled: 28,
+    waitlist: 0,
+    rating: 4.5,
+    credits: 3,
+  },
+  {
+    id: 'CS201',
+    name: 'Data Structures',
+    instructor: 'Dr. Michael Chen',
+    time: 'Tue/Thu 10:00-11:30 AM',
+    seats: 25,
+    enrolled: 25,
+    waitlist: 3,
+    rating: 4.2,
+    credits: 3,
+  },
+  {
+    id: 'CS301',
+    name: 'Database Systems',
+    instructor: 'Dr. Sarah Johnson',
+    time: 'Mon/Wed 2:00-3:30 PM',
+    seats: 20,
+    enrolled: 18,
+    waitlist: 0,
+    rating: 4.8,
+    credits: 3,
+  },
+  {
+    id: 'CS302',
+    name: 'Web Development',
+    instructor: 'Prof. David Lee',
+    time: 'Tue/Thu 1:00-2:30 PM',
+    seats: 30,
+    enrolled: 22,
+    waitlist: 0,
+    rating: 4.6,
+    credits: 3,
+  },
+  {
+    id: 'CS401',
+    name: 'Machine Learning',
+    instructor: 'Dr. Emily White',
+    time: 'Mon/Wed 10:00-11:30 AM',
+    seats: 15,
+    enrolled: 14,
+    waitlist: 0,
+    rating: 4.9,
+    credits: 3,
+  },
+  {
+    id: 'CS402',
+    name: 'Software Engineering',
+    instructor: 'Dr. Michael Chen',
+    time: 'Tue/Thu 2:00-3:30 PM',
+    seats: 25,
+    enrolled: 20,
+    waitlist: 0,
+    rating: 4.3,
+    credits: 3,
+  },
+  {
+    id: 'MATH201',
+    name: 'Discrete Mathematics',
+    instructor: 'Prof. Robert Kim',
+    time: 'Mon/Wed 11:00-12:30 PM',
+    seats: 30,
+    enrolled: 24,
+    waitlist: 0,
+    rating: 3.8,
+    credits: 3,
+  },
+  {
+    id: 'MATH301',
+    name: 'Linear Algebra',
+    instructor: 'Dr. Lisa Brown',
+    time: 'Tue/Thu 9:00-10:30 AM',
+    seats: 20,
+    enrolled: 19,
+    waitlist: 0,
+    rating: 4.1,
+    credits: 3,
+  },
+  {
+    id: 'ENG101',
+    name: 'Technical Writing',
+    instructor: 'Prof. Jennifer Adams',
+    time: 'Mon/Wed 1:00-2:30 PM',
+    seats: 25,
+    enrolled: 15,
+    waitlist: 0,
+    rating: 3.5,
+    credits: 3,
+  },
+  {
+    id: 'BUS201',
+    name: 'Project Management',
+    instructor: 'Dr. Thomas Green',
+    time: 'Tue/Thu 3:00-4:30 PM',
+    seats: 30,
+    enrolled: 26,
+    waitlist: 0,
+    rating: 4.4,
+    credits: 3,
+  },
+];
+
+export const currentStudent = students[0];
+
+export const enrolledCourses = [
+  { ...courses[0], grade: 'A', semester: 'Spring 2026' },
+  { ...courses[2], grade: 'A-', semester: 'Spring 2026' },
+  { ...courses[6], grade: 'B+', semester: 'Spring 2026' },
+];
+
+export const completedCourses = [
+  { id: 'CS100', name: 'Computer Fundamentals', grade: 'A', semester: 'Fall 2025', credits: 3 },
+  { id: 'MATH101', name: 'Calculus I', grade: 'B+', semester: 'Fall 2025', credits: 3 },
+  { id: 'ENG100', name: 'English Composition', grade: 'A-', semester: 'Fall 2025', credits: 3 },
+];
+
+export const applications = [
+  { id: 1, name: 'Alex Thompson', email: 'alex.t@email.com', status: 'Pending', appliedDate: '2026-04-15', gpa: 3.6 },
+  { id: 2, name: 'Maria Garcia', email: 'maria.g@email.com', status: 'Approved', appliedDate: '2026-04-10', gpa: 3.8 },
+  { id: 3, name: 'Kevin Park', email: 'kevin.p@email.com', status: 'Rejected', appliedDate: '2026-04-12', gpa: 2.1 },
+  { id: 4, name: 'Rachel Kim', email: 'rachel.k@email.com', status: 'Pending', appliedDate: '2026-04-18', gpa: 3.9 },
+];
+
+export const complaints = [
+  { id: 1, student: 'John Doe', course: 'CS201', type: 'Grading Issue', status: 'Open', date: '2026-04-20' },
+  { id: 2, student: 'Mike Johnson', course: 'CS301', type: 'Instructor Conduct', status: 'Resolved', date: '2026-04-15' },
+  { id: 3, student: 'Emily Davis', course: 'MATH201', type: 'Course Content', status: 'Under Review', date: '2026-04-22' },
+];
