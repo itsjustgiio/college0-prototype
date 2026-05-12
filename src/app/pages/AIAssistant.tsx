@@ -4,6 +4,8 @@ import { ArrowLeft, Send, AlertTriangle, Database, Sparkles } from "lucide-react
 import { Card, CardHeader, CardBody } from "../components/Card";
 import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
+import { useAuth } from "../auth/AuthProvider";
+import { localCollegeRepository } from "../services/localCollegeRepository";
 
 interface Message {
   id: number;
@@ -14,6 +16,11 @@ interface Message {
 }
 
 export function AIAssistant() {
+  const { user } = useAuth();
+  const student = localCollegeRepository.getStudentProfile({
+    name: user?.name ?? "Student",
+    email: user?.email ?? "",
+  });
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -63,7 +70,7 @@ export function AIAssistant() {
         response = {
           id: messages.length + 2,
           type: "assistant",
-          content: 'Your current GPA is 3.8. You have completed 6 of 8 required courses and are currently in "Good Standing."',
+          content: `Your current GPA is ${student.gpa}. You have completed ${student.coursesCompleted} of 8 required courses and are currently in "${student.status}."`,
           source: "database",
         };
       } else {

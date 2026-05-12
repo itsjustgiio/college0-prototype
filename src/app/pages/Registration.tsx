@@ -5,6 +5,8 @@ import { Card, CardHeader, CardBody } from "../components/Card";
 import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
 import { courses } from "../data/mockData";
+import { useAuth } from "../auth/AuthProvider";
+import { localCollegeRepository } from "../services/localCollegeRepository";
 
 interface SelectedCourse {
   id: string;
@@ -16,8 +18,10 @@ interface SelectedCourse {
 }
 
 export function Registration() {
+  const { user } = useAuth();
   const [selectedCourses, setSelectedCourses] = useState<SelectedCourse[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
+  const [successMessage, setSuccessMessage] = useState("");
 
   const minCourses = 2;
   const maxCourses = 4;
@@ -81,7 +85,16 @@ export function Registration() {
       setErrors([`Maximum ${maxCourses} courses allowed (BR-03)`]);
       return;
     }
-    alert("Registration submitted successfully!");
+    if (!user?.email) {
+      setErrors(["You must be signed in to submit registration."]);
+      return;
+    }
+
+    localCollegeRepository.saveStudentRegistration({
+      email: user.email,
+      selectedCourses,
+    });
+    setSuccessMessage("Registration submitted successfully. Your dashboard now reflects these selections.");
   };
 
   const totalCredits = selectedCourses.reduce((sum, c) => sum + c.credits, 0);
@@ -134,6 +147,17 @@ export function Registration() {
             </Card>
           ))}
         </div>
+      )}
+
+      {successMessage && (
+        <Card className="border-emerald-200 bg-emerald-50">
+          <CardBody className="py-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-4 w-4 text-emerald-700" />
+              <p className="text-sm text-emerald-900">{successMessage}</p>
+            </div>
+          </CardBody>
+        </Card>
       )}
 
       <div className="grid gap-6 xl:grid-cols-[1.65fr_0.9fr]">

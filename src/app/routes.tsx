@@ -6,8 +6,11 @@ import { DashboardLayout } from "./layouts/DashboardLayout";
 // Pages
 import { Public } from "./pages/Public";
 import { NotFound } from "./pages/NotFound";
+import { Login } from "./pages/Login";
+import { ChangePassword } from "./pages/ChangePassword";
 import { StudentDashboard } from "./pages/StudentDashboard";
 import { Registration } from "./pages/Registration";
+import { StudentRecords } from "./pages/StudentRecords";
 import {
   InstructorDashboard,
   InstructorCoursesPage,
@@ -24,6 +27,7 @@ import { AIAssistant } from "./pages/AIAssistant";
 import { SmartCRE } from "./pages/SmartCRE";
 import { Flow } from "./pages/Flow";
 import { Handoff } from "./pages/Handoff";
+import { ProtectedRoute } from "./auth/ProtectedRoute";
 
 export const router = createBrowserRouter([
   {
@@ -38,34 +42,52 @@ export const router = createBrowserRouter([
           { index: true, Component: Public },
         ],
       },
+      { path: "login", Component: Login },
+      { path: "change-password", Component: ChangePassword },
       {
         path: "student",
-        Component: DashboardLayout,
+        Component: () => <ProtectedRoute allowedRole="student" />,
         children: [
-          { index: true, Component: StudentDashboard },
-          { path: "registration", Component: Registration },
-          { path: "smart-cre", Component: SmartCRE },
-          { path: "ai-assistant", Component: AIAssistant },
+          {
+            Component: DashboardLayout,
+            children: [
+              { index: true, Component: StudentDashboard },
+              { path: "registration", Component: Registration },
+              { path: "records", Component: StudentRecords },
+              { path: "smart-cre", Component: SmartCRE },
+              { path: "ai-assistant", Component: AIAssistant },
+            ],
+          },
         ],
       },
       {
         path: "instructor",
-        Component: DashboardLayout,
+        Component: () => <ProtectedRoute allowedRole="instructor" />,
         children: [
-          { index: true, Component: InstructorDashboard },
-          { path: "courses", Component: InstructorCoursesPage },
-          { path: "students", Component: InstructorStudentsPage },
-          { path: "grading", Component: InstructorGradingPage },
+          {
+            Component: DashboardLayout,
+            children: [
+              { index: true, Component: InstructorDashboard },
+              { path: "courses", Component: InstructorCoursesPage },
+              { path: "students", Component: InstructorStudentsPage },
+              { path: "grading", Component: InstructorGradingPage },
+            ],
+          },
         ],
       },
       {
         path: "registrar",
-        Component: DashboardLayout,
+        Component: () => <ProtectedRoute allowedRole="registrar" />,
         children: [
-          { index: true, Component: RegistrarDashboard },
-          { path: "applications", Component: RegistrarApplicationsPage },
-          { path: "complaints", Component: RegistrarComplaintsPage },
-          { path: "semester-control", Component: RegistrarSemesterControlPage },
+          {
+            Component: DashboardLayout,
+            children: [
+              { index: true, Component: RegistrarDashboard },
+              { path: "applications", Component: RegistrarApplicationsPage },
+              { path: "complaints", Component: RegistrarComplaintsPage },
+              { path: "semester-control", Component: RegistrarSemesterControlPage },
+            ],
+          },
         ],
       },
       { path: "flow", Component: Flow },

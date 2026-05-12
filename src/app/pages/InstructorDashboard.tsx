@@ -2,24 +2,8 @@ import { BookOpen, Users, TrendingUp, AlertCircle, ClipboardCheck, BarChart3 } f
 import { Card, CardHeader, CardBody } from "../components/Card";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
-import { courses } from "../data/mockData";
-
-const instructorName = "Dr. Sarah Johnson";
-const instructorCourses = courses.filter((c) => c.instructor === instructorName);
-
-const studentsList = [
-  { id: 1, name: "John Doe", course: "CS101", grade: "A", attendance: 95, status: "Good Standing" },
-  { id: 2, name: "Jane Smith", course: "CS101", grade: "A-", attendance: 100, status: "Good Standing" },
-  { id: 3, name: "Mike Johnson", course: "CS301", grade: "B+", attendance: 85, status: "Warning" },
-  { id: 4, name: "Emily Davis", course: "CS101", grade: "A", attendance: 90, status: "Good Standing" },
-  { id: 5, name: "Sarah Lee", course: "CS301", grade: "B", attendance: 92, status: "Good Standing" },
-];
-
-const waitlistStudents = [
-  { id: 1, name: "Chris Wilson", course: "CS301", position: 1, appliedDate: "2026-04-20" },
-  { id: 2, name: "Lisa Anderson", course: "CS301", position: 2, appliedDate: "2026-04-21" },
-  { id: 3, name: "Tom Martinez", course: "CS301", position: 3, appliedDate: "2026-04-22" },
-];
+import { useAuth } from "../auth/AuthProvider";
+import { localCollegeRepository } from "../services/localCollegeRepository";
 
 function InstructorHeader({
   title,
@@ -37,6 +21,18 @@ function InstructorHeader({
 }
 
 export function InstructorDashboard() {
+  const { user } = useAuth();
+  const instructorCourses = localCollegeRepository.getInstructorCourses({
+    email: user?.email ?? "",
+    name: user?.name ?? "",
+  });
+  const studentsList = localCollegeRepository.getInstructorRoster(user?.email ?? "");
+  const waitlistStudents = localCollegeRepository.getInstructorWaitlist(user?.email ?? "");
+  const averageRating = instructorCourses.length
+    ? (instructorCourses.reduce((sum, course) => sum + course.rating, 0) / instructorCourses.length).toFixed(1)
+    : "0.0";
+  const lowestEnrollmentCourse = [...instructorCourses].sort((a, b) => a.enrolled - b.enrolled)[0];
+
   return (
     <div className="space-y-6">
       <InstructorHeader
@@ -69,7 +65,7 @@ export function InstructorDashboard() {
         <Card>
           <CardBody>
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Average rating</p>
-            <div className="mt-3 text-4xl text-slate-950">4.6</div>
+            <div className="mt-3 text-4xl text-slate-950">{averageRating}</div>
             <div className="mt-2"><Badge variant="success">Excellent</Badge></div>
           </CardBody>
         </Card>
@@ -103,25 +99,34 @@ export function InstructorDashboard() {
           </CardBody>
         </Card>
 
-        <Card className="border-amber-200 bg-amber-50">
-          <CardBody>
-            <div className="flex items-start gap-3">
-              <AlertCircle className="mt-0.5 h-5 w-5 text-amber-700" />
-              <div>
-                <h3 className="text-base text-amber-950">Low enrollment alert</h3>
-                <p className="mt-1 text-sm leading-6 text-amber-900">
-                  CS301 Database Systems is currently below target enrollment and may need review if the roster stays low.
-                </p>
+        {lowestEnrollmentCourse && (
+          <Card className="border-amber-200 bg-amber-50">
+            <CardBody>
+              <div className="flex items-start gap-3">
+                <AlertCircle className="mt-0.5 h-5 w-5 text-amber-700" />
+                <div>
+                  <h3 className="text-base text-amber-950">Low enrollment alert</h3>
+                  <p className="mt-1 text-sm leading-6 text-amber-900">
+                    {lowestEnrollmentCourse.id} {lowestEnrollmentCourse.name} is currently the lightest section in your teaching load and may need review if the roster stays low.
+                  </p>
+                </div>
               </div>
-            </div>
-          </CardBody>
-        </Card>
+            </CardBody>
+          </Card>
+        )}
       </div>
     </div>
   );
 }
 
 export function InstructorCoursesPage() {
+  const { user } = useAuth();
+  const instructorCourses = localCollegeRepository.getInstructorCourses({
+    email: user?.email ?? "",
+    name: user?.name ?? "",
+  });
+  const waitlistStudents = localCollegeRepository.getInstructorWaitlist(user?.email ?? "");
+
   return (
     <div className="space-y-6">
       <InstructorHeader
@@ -204,6 +209,9 @@ export function InstructorCoursesPage() {
 }
 
 export function InstructorStudentsPage() {
+  const { user } = useAuth();
+  const studentsList = localCollegeRepository.getInstructorRoster(user?.email ?? "");
+
   return (
     <div className="space-y-6">
       <InstructorHeader
@@ -252,6 +260,11 @@ export function InstructorStudentsPage() {
 }
 
 export function InstructorGradingPage() {
+  const { user } = useAuth();
+  const instructorCourses = localCollegeRepository.getInstructorCourses({
+    email: user?.email ?? "",
+    name: user?.name ?? "",
+  });
   const averageGrade = "A-";
   const submissionsPending = 7;
 

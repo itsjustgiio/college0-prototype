@@ -2,11 +2,18 @@ import { Link } from "react-router";
 import { Calendar, MessageSquare, Sparkles, Star, GraduationCap, TrendingUp, AlertCircle } from "lucide-react";
 import { Card, CardHeader, CardBody } from "../components/Card";
 import { Badge } from "../components/Badge";
-import { currentStudent, enrolledCourses, completedCourses } from "../data/mockData";
+import { useAuth } from "../auth/AuthProvider";
+import { localCollegeRepository } from "../services/localCollegeRepository";
 
 export function StudentDashboard() {
+  const { user } = useAuth();
+  const student = localCollegeRepository.getStudentProfile({
+    name: user?.name ?? "Student",
+    email: user?.email ?? "",
+  });
+  const { enrolledCourses, completedCourses } = localCollegeRepository.getStudentCourseSnapshot(student.email);
   const totalCoursesRequired = 8;
-  const coursesCompleted = currentStudent.coursesCompleted;
+  const coursesCompleted = student.coursesCompleted;
   const progressPercentage = (coursesCompleted / totalCoursesRequired) * 100;
 
   return (
@@ -18,7 +25,7 @@ export function StudentDashboard() {
             <div className="absolute bottom-0 right-0 h-32 w-32 rounded-tl-[3rem] bg-white/8" />
             <div className="relative max-w-2xl">
               <p className="text-xs uppercase tracking-[0.24em] text-blue-100/80">Student workspace</p>
-              <h1 className="mt-4 text-4xl text-white md:text-5xl">Welcome back, {currentStudent.name}</h1>
+              <h1 className="mt-4 text-4xl text-white md:text-5xl">Welcome back, {student.name}</h1>
               <p className="mt-4 text-base leading-7 text-blue-100/85">
                 Your next registration window is open. Keep an eye on progress requirements, active course load, and recommendation signals before seats tighten.
               </p>
@@ -46,11 +53,11 @@ export function StudentDashboard() {
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-2xl bg-white/5 p-4 text-white">
                 <div className="text-slate-400">Current GPA</div>
-                <div className="mt-2 text-2xl font-semibold text-white">{currentStudent.gpa}</div>
+                <div className="mt-2 text-2xl font-semibold text-white">{student.gpa}</div>
               </div>
               <div className="rounded-2xl bg-white/5 p-4 text-white">
                 <div className="text-slate-400">Warnings</div>
-                <div className="mt-2 text-2xl font-semibold text-white">{currentStudent.warnings}</div>
+                <div className="mt-2 text-2xl font-semibold text-white">{student.warnings}</div>
               </div>
             </div>
           </CardBody>
@@ -61,10 +68,10 @@ export function StudentDashboard() {
         <Card>
           <CardBody>
             <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Academic status</p>
-            <div className="mt-4 text-4xl text-slate-950">{currentStudent.gpa}</div>
+            <div className="mt-4 text-4xl text-slate-950">{student.gpa}</div>
             <div className="mt-1 text-sm text-slate-600">Current GPA across active coursework</div>
             <div className="mt-4">
-              <Badge variant="success">{currentStudent.status}</Badge>
+              <Badge variant="success">{student.status}</Badge>
             </div>
           </CardBody>
         </Card>
@@ -94,7 +101,7 @@ export function StudentDashboard() {
         <Card>
           <CardBody>
             <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Advising risk</p>
-            <div className="mt-4 text-4xl text-slate-950">{currentStudent.warnings}</div>
+            <div className="mt-4 text-4xl text-slate-950">{student.warnings}</div>
             <div className="mt-1 text-sm text-slate-600">Open warnings on your record</div>
             <div className="mt-4">
               <Badge variant="success">Good Standing</Badge>
@@ -103,7 +110,7 @@ export function StudentDashboard() {
         </Card>
       </div>
 
-      {currentStudent.gpa < 2.5 && (
+      {student.gpa < 2.5 && (
         <Card className="border-yellow-300 bg-yellow-50">
           <CardBody>
             <div className="flex items-start gap-3">

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router";
-import { Home, BookOpen, Calendar, Users, MessageSquare, Sparkles, BarChart3, Settings, FileText, GraduationCap } from "lucide-react";
+import { Home, BookOpen, Calendar, Users, MessageSquare, Sparkles, BarChart3, Settings, FileText, GraduationCap, ClipboardList } from "lucide-react";
 
 interface SidebarProps {
   role: "student" | "instructor" | "registrar";
@@ -12,6 +12,7 @@ export function Sidebar({ role }: SidebarProps) {
   const studentLinks = [
     { to: "/student", icon: Home, label: "Dashboard" },
     { to: "/student/registration", icon: Calendar, label: "Registration", badge: "UC-07" },
+    { to: "/student/records", icon: ClipboardList, label: "Records" },
     { to: "/student/smart-cre", icon: Sparkles, label: "Smart CRE" },
     { to: "/student/ai-assistant", icon: MessageSquare, label: "AI Assistant", badge: "UC-17" },
   ];

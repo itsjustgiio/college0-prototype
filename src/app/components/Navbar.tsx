@@ -1,13 +1,22 @@
-import { Bell, Search, User } from "lucide-react";
+import { Bell, LogOut, Search, User } from "lucide-react";
+import { useNavigate } from "react-router";
+import { useAuth } from "../auth/AuthProvider";
 
 interface NavbarProps {
   role: "student" | "instructor" | "registrar";
 }
 
 export function Navbar({ role }: NavbarProps) {
-  const userName = role === "student" ? "John Doe" : role === "instructor" ? "Dr. Sarah Johnson" : "Admin User";
-  const userEmail = role === "student" ? "john.doe@college0.edu" : role === "instructor" ? "sarah.johnson@college0.edu" : "admin@college0.edu";
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  const userName = user?.name ?? (role === "student" ? "John Doe" : role === "instructor" ? "Dr. Sarah Johnson" : "Admin User");
+  const userEmail = user?.email ?? (role === "student" ? "john.doe@college0.edu" : role === "instructor" ? "sarah.johnson@college0.edu" : "admin@college0.edu");
   const roleLabel = role === "student" ? "Student Workspace" : role === "instructor" ? "Instructor Workspace" : "Registrar Workspace";
+
+  const handleLogout = () => {
+    signOut();
+    navigate("/login", { replace: true });
+  };
 
   return (
     <header className="sticky top-0 z-20 flex h-20 items-center justify-between border-b border-slate-200 bg-white px-5 md:px-8">
@@ -42,6 +51,14 @@ export function Navbar({ role }: NavbarProps) {
             <User className="h-5 w-5 text-blue-700" />
           </div>
         </div>
+
+        <button
+          onClick={handleLogout}
+          className="rounded-2xl border border-slate-200 bg-white p-3 text-slate-600 transition-colors hover:bg-slate-50"
+          aria-label="Log out"
+        >
+          <LogOut className="h-5 w-5" />
+        </button>
       </div>
     </header>
   );
