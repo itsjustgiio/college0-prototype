@@ -393,8 +393,12 @@ export function RegistrarApplicationsPage() {
             <p className="text-sm text-slate-600">No student applications yet.</p>
           ) : (
             studentApplications.map((application) => {
+              const canApprove = application.status !== "approved";
+              const canReject = application.status !== "rejected";
               const approveIsOverride = isStudentDecisionOverride(application.recommendedDecision, "approved");
               const rejectIsOverride = isStudentDecisionOverride(application.recommendedDecision, "rejected");
+              const flipNeedsReason =
+                (canApprove && approveIsOverride) || (canReject && rejectIsOverride);
 
               return (
                 <div key={application.id} className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-5">
@@ -408,6 +412,9 @@ export function RegistrarApplicationsPage() {
                         <Badge variant={application.recommendedDecision === "accept" ? "success" : "danger"}>
                           Rule says {application.recommendedDecision}
                         </Badge>
+                        {application.reviewedAt && application.status !== "pending" && !application.overrideReason && (
+                          <Badge variant="info">Auto-decided</Badge>
+                        )}
                       </div>
                       <p className="mt-2 text-sm text-slate-700">{application.email}</p>
                       <p className="mt-1 text-sm text-slate-600">GPA {application.gpa.toFixed(2)} - Applied {new Date(application.submittedAt).toLocaleDateString()}</p>
@@ -421,31 +428,33 @@ export function RegistrarApplicationsPage() {
                       )}
                     </div>
 
-                    {application.status === "pending" && (
-                      <div className="w-full max-w-md space-y-3">
-                        {(approveIsOverride || rejectIsOverride) && (
-                          <textarea
-                            value={studentOverrideReasons[application.id] ?? ""}
-                            onChange={(event) =>
-                              setStudentOverrideReasons((current) => ({
-                                ...current,
-                                [application.id]: event.target.value,
-                              }))
-                            }
-                            placeholder="Required only if you decide against the system rule."
-                            className="min-h-24 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
-                          />
-                        )}
-                        <div className="flex flex-wrap justify-end gap-2">
+                    <div className="w-full max-w-md space-y-3">
+                      {flipNeedsReason && (
+                        <textarea
+                          value={studentOverrideReasons[application.id] ?? ""}
+                          onChange={(event) =>
+                            setStudentOverrideReasons((current) => ({
+                              ...current,
+                              [application.id]: event.target.value,
+                            }))
+                          }
+                          placeholder="Required only if you decide against the system rule."
+                          className="min-h-24 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                        />
+                      )}
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {canApprove && (
                           <Button variant="primary" size="sm" onClick={() => decideStudent(application, "approved")}>
-                            Approve
+                            {application.status === "rejected" ? "Override to approve" : "Approve"}
                           </Button>
+                        )}
+                        {canReject && (
                           <Button variant="danger" size="sm" onClick={() => decideStudent(application, "rejected")}>
-                            Reject
+                            {application.status === "approved" ? "Reverse to reject" : "Reject"}
                           </Button>
-                        </div>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               );

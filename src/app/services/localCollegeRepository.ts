@@ -331,6 +331,25 @@ export const localCollegeRepository = {
     return nextProfile;
   },
 
+  removeAcceptedStudentProfile(email: string) {
+    ensureSeededAcademicData();
+    const normalizedEmail = email.trim().toLowerCase();
+    const profiles = readJson<StudentAcademicProfile[]>(STORAGE_KEYS.studentProfiles, seededStudentProfiles);
+    const nextProfiles = profiles.filter((profile) => profile.email.toLowerCase() !== normalizedEmail);
+    writeJson(STORAGE_KEYS.studentProfiles, nextProfiles);
+
+    const snapshots = readJson<Record<string, StudentCourseSnapshot>>(
+      STORAGE_KEYS.studentCourseSnapshots,
+      seededStudentCourseSnapshots,
+    );
+    const nextSnapshots = { ...snapshots };
+    delete nextSnapshots[email];
+    writeJson(STORAGE_KEYS.studentCourseSnapshots, nextSnapshots);
+
+    // Future Supabase handoff:
+    // delete the student profile and any seeded snapshots when an approval is reversed.
+  },
+
   upsertInstructorAssignments(input: {
     email: string;
     assignedCourseIds: string[];

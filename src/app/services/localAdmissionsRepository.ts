@@ -62,6 +62,64 @@ function createTemporaryPassword() {
   return `Temp${Math.floor(1000 + Math.random() * 9000)}`;
 }
 
+function adjustActiveStudentCount(delta: number) {
+  const settings = readSettings();
+  const nextSettings: ProgramAdmissionSettings = {
+    ...settings,
+    activeStudentCount: Math.max(0, settings.activeStudentCount + delta),
+  };
+  writeJson(STORAGE_KEYS.settings, nextSettings);
+  return nextSettings;
+}
+
+function issueStudentApproval(application: StudentApplication, approvedCount: number) {
+  const studentId = createStudentId(approvedCount);
+  const temporaryPassword = createTemporaryPassword();
+
+  const issuedCredentials: StudentCredentialIssue = {
+    studentApplicationId: application.id,
+    studentId,
+    temporaryPassword,
+    mustChangePassword: true,
+    issuedAt: nowIsoDate(),
+  };
+
+  const nextCredentials = [issuedCredentials, ...readCredentials()];
+  writeJson(STORAGE_KEYS.credentials, nextCredentials);
+
+  localAuthRepository.upsertAcceptedStudentCredential({
+    id: `accepted-${application.id}`,
+    name: application.applicantName,
+    email: application.email,
+    studentId,
+    temporaryPassword,
+  });
+
+  localCollegeRepository.upsertAcceptedStudentProfile({
+    id: studentId,
+    name: application.applicantName,
+    email: application.email,
+    gpa: application.gpa,
+  });
+
+  adjustActiveStudentCount(1);
+
+  return issuedCredentials;
+}
+
+function revokeStudentApproval(application: StudentApplication) {
+  const credentials = readCredentials();
+  const nextCredentials = credentials.filter(
+    (credential) => credential.studentApplicationId !== application.id,
+  );
+  writeJson(STORAGE_KEYS.credentials, nextCredentials);
+
+  localAuthRepository.removeStudentCredential(application.email);
+  localCollegeRepository.removeAcceptedStudentProfile(application.email);
+
+  adjustActiveStudentCount(-1);
+}
+
 function ensureSeededData() {
   if (!hasBrowserStorage()) return;
 
@@ -145,21 +203,40 @@ export const localAdmissionsRepository: AdmissionsRepository = {
 
   async submitStudentApplication(input) {
     const settings = readSettings();
-    const nextApplication: StudentApplication = {
+    const recommendation = recommendStudentDecision(input, settings);
+    const autoDecision = recommendation === "accept" ? "approved" : "rejected";
+
+    const baseApplication: StudentApplication = {
       id: createId("stu-app"),
       applicantName: input.applicantName,
       email: input.email,
       gpa: input.gpa,
       submittedAt: nowIsoDate(),
-      status: "pending",
-      recommendedDecision: recommendStudentDecision(input, settings),
+      status: autoDecision,
+      recommendedDecision: recommendation,
+      registrarDecision: autoDecision,
+      reviewedAt: nowIsoDate(),
     };
+
+    let nextApplication = baseApplication;
+
+    if (autoDecision === "approved") {
+      const approvedCount = readStudentApplications().filter(
+        (entry) => entry.status === "approved",
+      ).length;
+      const issuedCredentials = issueStudentApproval(baseApplication, approvedCount);
+      nextApplication = {
+        ...baseApplication,
+        generatedStudentId: issuedCredentials.studentId,
+        issuedTemporaryPassword: issuedCredentials.temporaryPassword,
+      };
+    }
 
     const nextApplications = [nextApplication, ...readStudentApplications()];
     writeJson(STORAGE_KEYS.studentApplications, nextApplications);
 
     // Future Supabase handoff:
-    // replace this local write with an insert into `student_applications`.
+    // replace this local write with an insert into `student_applications` plus the auto-decision side effects.
     return nextApplication;
   },
 
@@ -194,6 +271,7 @@ export const localAdmissionsRepository: AdmissionsRepository = {
       throw new Error("Override justification is required.");
     }
 
+    const previousStatus = application.status;
     const reviewedApplication: StudentApplication = {
       ...application,
       status: input.decision,
@@ -204,40 +282,15 @@ export const localAdmissionsRepository: AdmissionsRepository = {
 
     let issuedCredentials: StudentCredentialIssue | undefined;
 
-    if (input.decision === "approved") {
+    if (input.decision === "approved" && previousStatus !== "approved") {
       const approvedCount = applications.filter((entry) => entry.status === "approved").length;
-      const studentId = createStudentId(approvedCount);
-      issuedCredentials = {
-        studentApplicationId: reviewedApplication.id,
-        studentId,
-        temporaryPassword: createTemporaryPassword(),
-        mustChangePassword: true,
-        issuedAt: nowIsoDate(),
-      };
-      reviewedApplication.generatedStudentId = studentId;
+      issuedCredentials = issueStudentApproval(reviewedApplication, approvedCount);
+      reviewedApplication.generatedStudentId = issuedCredentials.studentId;
       reviewedApplication.issuedTemporaryPassword = issuedCredentials.temporaryPassword;
-
-      const nextCredentials = [issuedCredentials, ...readCredentials()];
-      writeJson(STORAGE_KEYS.credentials, nextCredentials);
-
-      localAuthRepository.upsertAcceptedStudentCredential({
-        id: `accepted-${reviewedApplication.id}`,
-        name: reviewedApplication.applicantName,
-        email: reviewedApplication.email,
-        studentId,
-        temporaryPassword: issuedCredentials.temporaryPassword,
-      });
-
-      localCollegeRepository.upsertAcceptedStudentProfile({
-        id: studentId,
-        name: reviewedApplication.applicantName,
-        email: reviewedApplication.email,
-        gpa: reviewedApplication.gpa,
-      });
-
-      // Future login/database handoff:
-      // persist this as a real auth/account record in Supabase and force password reset on first login.
-      // For now, we only issue and store the credential package locally for the admissions demo.
+    } else if (input.decision === "rejected" && previousStatus === "approved") {
+      revokeStudentApproval(reviewedApplication);
+      reviewedApplication.generatedStudentId = undefined;
+      reviewedApplication.issuedTemporaryPassword = undefined;
     }
 
     const nextApplications = applications.map((entry) =>
@@ -246,7 +299,7 @@ export const localAdmissionsRepository: AdmissionsRepository = {
     writeJson(STORAGE_KEYS.studentApplications, nextApplications);
 
     // Future Supabase handoff:
-    // replace this update with a status update + optional credential issuance transaction.
+    // replace this update with a status update + credential issuance/revocation transaction.
     return { application: reviewedApplication, issuedCredentials };
   },
 

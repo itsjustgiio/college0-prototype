@@ -68,8 +68,20 @@ function writeJson<T>(key: string, value: T) {
 
 function ensureSeededCredentials() {
   if (!hasBrowserStorage()) return;
-  if (!window.localStorage.getItem(STORAGE_KEYS.credentials)) {
+
+  const stored = readJson<AuthCredentialRecord[] | null>(STORAGE_KEYS.credentials, null);
+  if (!stored) {
     writeJson(STORAGE_KEYS.credentials, seededCredentials);
+    return;
+  }
+
+  const storedEmails = new Set(stored.map((credential) => credential.email.toLowerCase()));
+  const missing = seededCredentials.filter(
+    (credential) => !storedEmails.has(credential.email.toLowerCase()),
+  );
+
+  if (missing.length > 0) {
+    writeJson(STORAGE_KEYS.credentials, [...stored, ...missing]);
   }
 }
 
@@ -166,6 +178,18 @@ export const localAuthRepository = {
     // Future Supabase handoff:
     // create a real auth account here once approvals are backed by the database.
     return nextRecord;
+  },
+
+  removeStudentCredential(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const credentials = readCredentials();
+    const nextCredentials = credentials.filter(
+      (credential) => credential.email.toLowerCase() !== normalizedEmail,
+    );
+    writeJson(STORAGE_KEYS.credentials, nextCredentials);
+
+    // Future Supabase handoff:
+    // disable or delete the auth account when an approval is reversed.
   },
 
   upsertAcceptedInstructorCredential(input: {
