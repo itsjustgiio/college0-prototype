@@ -7,15 +7,26 @@ import { complaints, students, courses } from "../data/mockData";
 import type { InstructorApplication, ProgramAdmissionSettings, StudentApplication } from "../domain/admissions";
 import { isStudentDecisionOverride } from "../domain/admissions";
 import { localAdmissionsRepository } from "../services/localAdmissionsRepository";
+import { useSemesterPhase } from "../hooks/useSemesterPhase";
+import { SEMESTER_PHASES, type SemesterPhase } from "../services/localSemesterRepository";
 
-const semesterPhases = [
-  { phase: "Registration", status: "active", startDate: "2026-04-15", endDate: "2026-05-15" },
-  { phase: "Classes", status: "upcoming", startDate: "2026-05-16", endDate: "2026-08-15" },
-  { phase: "Grading", status: "upcoming", startDate: "2026-08-16", endDate: "2026-08-30" },
-  { phase: "Review", status: "upcoming", startDate: "2026-09-01", endDate: "2026-09-15" },
-];
+const semesterPhaseDates: Record<SemesterPhase, { startDate: string; endDate: string }> = {
+  setup: { startDate: "2026-03-15", endDate: "2026-04-14" },
+  registration: { startDate: "2026-04-15", endDate: "2026-05-15" },
+  running: { startDate: "2026-05-16", endDate: "2026-08-15" },
+  grading: { startDate: "2026-08-16", endDate: "2026-08-30" },
+};
 
 const studentsAtRisk = students.filter((s) => s.gpa < 2.5 || s.warnings > 0);
+
+function buildPhaseTimeline(activePhase: SemesterPhase) {
+  return SEMESTER_PHASES.map((entry) => ({
+    id: entry.id,
+    phase: entry.label,
+    status: entry.id === activePhase ? ("active" as const) : ("upcoming" as const),
+    ...semesterPhaseDates[entry.id],
+  }));
+}
 
 function RegistrarHeader({
   title,
@@ -33,6 +44,8 @@ function RegistrarHeader({
 }
 
 export function RegistrarDashboard() {
+  const [phase] = useSemesterPhase();
+  const semesterPhases = useMemo(() => buildPhaseTimeline(phase), [phase]);
   const [pendingApplicationsCount, setPendingApplicationsCount] = useState(0);
 
   useEffect(() => {
@@ -587,6 +600,11 @@ export function RegistrarComplaintsPage() {
 }
 
 export function RegistrarSemesterControlPage() {
+  const [phase, setPhase] = useSemesterPhase();
+  const semesterPhases = useMemo(() => buildPhaseTimeline(phase), [phase]);
+  const activeIndex = SEMESTER_PHASES.findIndex((entry) => entry.id === phase);
+  const nextPhase = SEMESTER_PHASES[(activeIndex + 1) % SEMESTER_PHASES.length];
+
   return (
     <div className="space-y-6">
       <RegistrarHeader
@@ -601,7 +619,9 @@ export function RegistrarSemesterControlPage() {
               <Settings className="h-5 w-5 text-blue-700" />
               <h2 className="text-xl text-slate-950">Phase Timeline</h2>
             </div>
-            <Button variant="primary" size="sm">Advance phase</Button>
+            <Button variant="primary" size="sm" onClick={() => setPhase(nextPhase.id)}>
+              Advance to {nextPhase.label}
+            </Button>
           </div>
         </CardHeader>
         <CardBody className="space-y-3">
@@ -642,10 +662,10 @@ export function RegistrarSemesterControlPage() {
         </CardHeader>
         <CardBody className="space-y-3">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">
-            Registration is currently active. Course add and waitlist rules are in effect.
+            {SEMESTER_PHASES[activeIndex]?.description ?? ""}
           </div>
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">
-            Advancing the phase would move the system into classes beginning on May 16, 2026.
+            Advancing the phase would move the system into <span className="font-medium">{nextPhase.label}</span>.
           </div>
         </CardBody>
       </Card>

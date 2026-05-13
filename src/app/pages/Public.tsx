@@ -21,8 +21,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../components/ui/dialog";
+import { useSemesterPhase } from "../hooks/useSemesterPhase";
+import { SEMESTER_PHASES } from "../services/localSemesterRepository";
 
 export function Public() {
+  const [phase, setPhase] = useSemesterPhase();
+  const currentPhase = SEMESTER_PHASES.find((entry) => entry.id === phase) ?? SEMESTER_PHASES[1];
   const [classFilter, setClassFilter] = useState<"All" | "CS" | "Math" | "General Ed" | "Business">("All");
   const [studentForm, setStudentForm] = useState({ applicantName: "", email: "", gpa: "" });
   const [studentSubmitState, setStudentSubmitState] = useState<"idle" | "success" | "error">("idle");
@@ -171,7 +175,9 @@ export function Public() {
           </div>
           <div className="hidden items-center gap-3 text-sm text-blue-100/80 md:flex">
             <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1.5">Spring 2026</span>
-            <span className="rounded-full border border-emerald-300/30 bg-emerald-400/10 px-3 py-1.5 text-emerald-100">System healthy</span>
+            <span className="rounded-full border border-amber-300/30 bg-amber-400/10 px-3 py-1.5 text-amber-100">
+              Phase: {currentPhase.label}
+            </span>
             <Dialog>
               <DialogTrigger className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-sm font-medium text-white transition-all hover:bg-white/15">
                 View all classes
@@ -238,6 +244,37 @@ export function Public() {
               <span className="rounded-full border border-white/10 bg-white/8 px-4 py-2">4 semester phases</span>
               <span className="rounded-full border border-white/10 bg-white/8 px-4 py-2">Role-based dashboards</span>
               <span className="rounded-full border border-white/10 bg-white/8 px-4 py-2">AI support with fallback warnings</span>
+            </div>
+
+            <div className="mt-8 rounded-3xl border border-white/10 bg-white/8 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-blue-100/75">Demo control</p>
+                  <p className="mt-1 text-sm text-white">
+                    Active phase: <span className="font-semibold">{currentPhase.label}</span>
+                  </p>
+                </div>
+                <p className="max-w-md text-xs leading-5 text-blue-100/75">{currentPhase.description}</p>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {SEMESTER_PHASES.map((entry) => {
+                  const isActive = entry.id === phase;
+                  return (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      onClick={() => setPhase(entry.id)}
+                      className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                        isActive
+                          ? "bg-white text-slate-950"
+                          : "border border-white/15 bg-white/5 text-blue-100/90 hover:bg-white/15"
+                      }`}
+                    >
+                      {entry.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="mt-8 flex flex-wrap gap-3">
