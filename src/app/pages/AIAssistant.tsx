@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import { ArrowLeft, Send, AlertTriangle, Database, Sparkles } from "lucide-react";
+import { ArrowLeft, Send, AlertTriangle, Database, Sparkles, Loader2 } from "lucide-react";
 import { Card, CardHeader, CardBody } from "../components/Card";
 import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
 import { useAuth } from "../auth/AuthProvider";
-import { localCollegeRepository } from "../services/localCollegeRepository";
+import { handleAIQuery } from "../services/aiService";
 
 interface Message {
   id: number;
@@ -15,12 +15,26 @@ interface Message {
   warning?: boolean;
 }
 
+function describeAIError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+
+  if (message.includes("429 Too Many Requests") || message.includes("Quota exceeded")) {
+    return "Gemini is reachable, but this API key or project currently has no quota available for the configured model.";
+  }
+
+  if (message.includes("API key not valid") || message.includes("API_KEY_INVALID")) {
+    return "Gemini rejected the configured API key. Check VITE_GEMINI_API_KEY in your local environment.";
+  }
+
+  if (message.includes("reported as leaked")) {
+    return "Gemini blocked this API key because it was reported as leaked. Create a new key and update the local environment file.";
+  }
+
+  return "Something went wrong reaching the AI fallback. Please try again.";
+}
+
 export function AIAssistant() {
   const { user } = useAuth();
-  const student = localCollegeRepository.getStudentProfile({
-    name: user?.name ?? "Student",
-    email: user?.email ?? "",
-  });
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -30,6 +44,7 @@ export function AIAssistant() {
     },
   ]);
   const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const sampleQuestions = [
     "What are the graduation requirements?",
@@ -38,55 +53,40 @@ export function AIAssistant() {
     "What is my current GPA?",
   ];
 
-  const handleSend = () => {
-    if (!input.trim()) return;
+  const handleSend = async () => {
+    if (!input.trim() || loading || !user) return;
 
-    const userMessage: Message = {
-      id: messages.length + 1,
-      type: "user",
-      content: input,
-    };
+    const query = input.trim();
+    setInput("");
+    setMessages((prev) => [...prev, { id: Date.now(), type: "user", content: query }]);
+    setLoading(true);
 
-    setMessages((prev) => [...prev, userMessage]);
-
-    setTimeout(() => {
-      let response: Message;
-
-      if (input.toLowerCase().includes("graduation") || input.toLowerCase().includes("requirement")) {
-        response = {
-          id: messages.length + 2,
+    try {
+      const result = await handleAIQuery(query, user.role, user.email, user.name);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
           type: "assistant",
-          content: "To graduate, you must complete 8 courses, maintain at least a 2.0 GPA, and stay in good academic standing with no more than 2 warnings.",
-          source: "database",
-        };
-      } else if (input.toLowerCase().includes("deadline") || input.toLowerCase().includes("registration")) {
-        response = {
-          id: messages.length + 2,
+          content: result.answer,
+          source: result.source,
+          warning: result.warning,
+        },
+      ]);
+    } catch (error) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
           type: "assistant",
-          content: "Spring 2026 registration runs from April 15, 2026 through May 15, 2026. Classes begin on May 16, 2026.",
-          source: "database",
-        };
-      } else if (input.toLowerCase().includes("gpa")) {
-        response = {
-          id: messages.length + 2,
-          type: "assistant",
-          content: `Your current GPA is ${student.gpa}. You have completed ${student.coursesCompleted} of 8 required courses and are currently in "${student.status}."`,
-          source: "database",
-        };
-      } else {
-        response = {
-          id: messages.length + 2,
-          type: "assistant",
-          content: "I can offer a general recommendation, but this answer is not coming from the college database. For final decisions, confirm with your advisor or the registrar.",
+          content: describeAIError(error),
           source: "llm",
           warning: true,
-        };
-      }
-
-      setMessages((prev) => [...prev, response]);
-    }, 350);
-
-    setInput("");
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -151,6 +151,14 @@ export function AIAssistant() {
                 </div>
               </div>
             ))}
+            {loading && (
+              <div className="flex justify-start">
+                <div className="inline-flex items-center gap-2 rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Thinking...
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="border-t border-slate-200 bg-white p-4">
@@ -161,10 +169,11 @@ export function AIAssistant() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
                 placeholder="Ask a question..."
+                disabled={loading}
                 className="flex-1 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
               />
-              <Button variant="primary" onClick={handleSend} className="gap-2">
-                <Send className="h-4 w-4" />
+              <Button variant="primary" onClick={handleSend} disabled={loading} className="gap-2">
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 Send
               </Button>
             </div>
@@ -181,6 +190,7 @@ export function AIAssistant() {
                 <button
                   key={index}
                   onClick={() => setInput(question)}
+                  disabled={loading}
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm text-slate-700 transition-colors hover:bg-slate-100"
                 >
                   {question}
