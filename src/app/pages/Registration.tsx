@@ -12,6 +12,10 @@ import {
   Lock,
   PanelLeftClose,
   PanelLeftOpen,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { Card, CardHeader, CardBody } from "../components/Card";
 import { Button } from "../components/Button";
@@ -645,92 +649,118 @@ function ScheduleBuilder({
             )}
           </div>
 
-          <div className="min-w-0">
-            <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <button
-                type="button"
-                onClick={() => setDetailsOpen((value) => !value)}
-                className="flex items-center gap-3 text-sm text-slate-600"
-              >
-                <span>Class details</span>
-                <span className={`h-5 w-9 rounded-full p-0.5 transition-colors ${detailsOpen ? "bg-blue-600" : "bg-slate-200"}`}>
-                  <span className={`block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${detailsOpen ? "translate-x-4" : ""}`} />
+          <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="bg-slate-950 px-4 py-2 text-center text-sm font-semibold uppercase tracking-[0.16em] text-white">
+              Schedule Results
+            </div>
+            <div className="relative pr-8">
+              <div className="absolute bottom-0 right-0 top-0 flex w-8 items-start justify-center bg-slate-950 pt-4 text-white">
+                <span className="[writing-mode:vertical-rl] text-xs font-semibold uppercase tracking-[0.16em]">
+                  Favorites (0)
                 </span>
-              </button>
-              <label className="flex items-center gap-2 text-sm text-slate-600">
-                Sort by
-                <select className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900">
-                  <option>Earliest start</option>
-                  <option>Course code</option>
-                </select>
-              </label>
-            </div>
-
-            <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-              <div className="min-w-[760px]">
-                <div className="grid grid-cols-[72px_repeat(5,minmax(0,1fr))] border-b border-slate-200 bg-slate-100">
-                  <div className="px-3 py-3 text-xs uppercase tracking-[0.14em] text-slate-500">Time</div>
-                  {WEEKDAYS.map((day) => (
-                    <div key={day} className="border-l border-slate-200 px-3 py-3 text-center text-sm font-medium text-slate-950">
-                      {day}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-[72px_repeat(5,minmax(0,1fr))]">
-                  <div className="relative bg-slate-50" style={{ height: scheduleHeight }}>
-                    {marks.map((mark) => (
-                      <div
-                        key={mark}
-                        className="absolute right-2 -translate-y-2 text-xs text-slate-500"
-                        style={{ top: `${((mark - SCHEDULE_START_MINUTES) / (SCHEDULE_END_MINUTES - SCHEDULE_START_MINUTES)) * 100}%` }}
-                      >
-                        {formatMinutes(mark).replace(":00", "")}
-                      </div>
-                    ))}
-                  </div>
-
-                  {WEEKDAYS.map((day) => (
-                    <div key={day} className="relative border-l border-slate-200" style={{ height: scheduleHeight }}>
-                      {marks.map((mark) => (
-                        <div
-                          key={`${day}-${mark}`}
-                          className="absolute left-0 right-0 border-t border-slate-100"
-                          style={{ top: `${((mark - SCHEDULE_START_MINUTES) / (SCHEDULE_END_MINUTES - SCHEDULE_START_MINUTES)) * 100}%` }}
-                        />
-                      ))}
-
-                      {blocks
-                        .filter((block) => block.day === day)
-                        .map(({ course, color }) => {
-                          const isWaitlisted = waitlistedCourseIds.has(course.id);
-                          const isPlanned = plannedCourseIds.has(course.id);
-                          return (
-                            <div
-                              key={`${course.id}-${day}`}
-                              className={`absolute left-1 right-1 overflow-hidden rounded-xl border-l-4 px-2 py-2 text-center text-xs shadow-sm ${color} ${isWaitlisted || isPlanned ? "opacity-75" : ""}`}
-                              style={blockStyle(course)}
-                            >
-                              <p className="font-semibold leading-tight">{course.id}</p>
-                              {detailsOpen && (
-                                <>
-                                  <p className="leading-tight">LEC</p>
-                                  <p className="mt-1 truncate leading-tight">{course.name}</p>
-                                </>
-                              )}
-                              <p className="mt-1 leading-tight">{formatMinutes(course.schedule.startMinutes)} - {formatMinutes(course.schedule.endMinutes)}</p>
-                              {isWaitlisted && <p className="mt-1 font-medium">Waitlist</p>}
-                              {isPlanned && <p className="mt-1 font-medium">Planned</p>}
-                            </div>
-                          );
-                        })}
-                    </div>
-                  ))}
-                </div>
               </div>
-            </div>
 
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <div className="px-4 py-4">
+                <div className="mb-4 grid gap-3 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
+                  <button
+                    type="button"
+                    onClick={() => setDetailsOpen((value) => !value)}
+                    className="flex items-center gap-3 text-sm text-slate-700"
+                  >
+                    <span>Class Details</span>
+                    <span className={`h-5 w-9 rounded-full p-0.5 transition-colors ${detailsOpen ? "bg-blue-600" : "bg-slate-200"}`}>
+                      <span className={`block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${detailsOpen ? "translate-x-4" : ""}`} />
+                    </span>
+                  </button>
+                  <div className="flex items-center justify-center gap-2 text-sm font-medium text-slate-950">
+                    <Badge variant="danger">5</Badge>
+                    <span>TIPS</span>
+                  </div>
+                  <label className="flex items-center gap-2 justify-self-start text-sm text-slate-700 lg:justify-self-end">
+                    Sort by
+                    <select className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900">
+                      <option>Select...</option>
+                      <option>Earliest start</option>
+                      <option>Course code</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="mb-4 flex items-center justify-center gap-6 text-slate-300">
+                  <ChevronsLeft className="h-8 w-8" />
+                  <ChevronLeft className="h-8 w-8" />
+                  <div className="text-center text-sm font-semibold uppercase leading-tight text-slate-950">
+                    Result<br />1 of 1
+                  </div>
+                  <ChevronRight className="h-8 w-8" />
+                  <ChevronsRight className="h-8 w-8" />
+                </div>
+
+                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                  <div className="min-w-[760px]">
+                    <div className="grid grid-cols-[72px_repeat(5,minmax(0,1fr))] border-b border-slate-200 bg-slate-200">
+                      <div className="px-3 py-3 text-xs uppercase tracking-[0.14em] text-slate-500">Time</div>
+                      {WEEKDAYS.map((day) => (
+                        <div key={day} className="border-l border-slate-300 px-3 py-3 text-center text-sm font-medium text-slate-950">
+                          {day}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-[72px_repeat(5,minmax(0,1fr))]">
+                      <div className="relative bg-slate-50" style={{ height: scheduleHeight }}>
+                        {marks.map((mark) => (
+                          <div
+                            key={mark}
+                            className="absolute right-2 -translate-y-2 text-xs text-slate-500"
+                            style={{ top: `${((mark - SCHEDULE_START_MINUTES) / (SCHEDULE_END_MINUTES - SCHEDULE_START_MINUTES)) * 100}%` }}
+                          >
+                            {formatMinutes(mark).replace(":00", "")}
+                          </div>
+                        ))}
+                      </div>
+
+                      {WEEKDAYS.map((day) => (
+                        <div key={day} className="relative border-l border-slate-200" style={{ height: scheduleHeight }}>
+                          {marks.map((mark) => (
+                            <div
+                              key={`${day}-${mark}`}
+                              className="absolute left-0 right-0 border-t border-slate-100"
+                              style={{ top: `${((mark - SCHEDULE_START_MINUTES) / (SCHEDULE_END_MINUTES - SCHEDULE_START_MINUTES)) * 100}%` }}
+                            />
+                          ))}
+
+                          {blocks
+                            .filter((block) => block.day === day)
+                            .map(({ course, color }) => {
+                              const isWaitlisted = waitlistedCourseIds.has(course.id);
+                              const isPlanned = plannedCourseIds.has(course.id);
+                              return (
+                                <div
+                                  key={`${course.id}-${day}`}
+                                  className={`absolute left-1 right-1 overflow-hidden rounded-sm border-l-4 px-2 py-2 text-center text-xs shadow-sm ${color} ${isWaitlisted || isPlanned ? "opacity-75" : ""}`}
+                                  style={blockStyle(course)}
+                                >
+                                  <p className="font-semibold leading-tight">{course.id}</p>
+                                  {detailsOpen && (
+                                    <>
+                                      <p className="leading-tight">LEC</p>
+                                      <p className="mt-1 truncate leading-tight">{course.name}</p>
+                                    </>
+                                  )}
+                                  <p className="mt-1 leading-tight">{formatMinutes(course.schedule.startMinutes)} - {formatMinutes(course.schedule.endMinutes)}</p>
+                                  {isWaitlisted && <p className="mt-1 font-medium">Waitlist</p>}
+                                  {isPlanned && <p className="mt-1 font-medium">Planned</p>}
+                                </div>
+                              );
+                            })}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
               <div className="mb-3 flex items-center justify-between text-sm">
                 <span className="font-medium text-slate-950">Term overview</span>
                 <span className="text-slate-500">Spring 2026</span>
@@ -775,6 +805,8 @@ function ScheduleBuilder({
               </div>
             </div>
           </div>
+          </div>
+        </div>
         </div>
       </CardBody>
     </Card>
