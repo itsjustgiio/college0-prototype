@@ -20,7 +20,7 @@ import { useStudentEnrollment } from "../hooks/useStudentEnrollment";
 import { useSemesterPhase } from "../hooks/useSemesterPhase";
 import { useSpecialReregEligible, useStudentSuspension } from "../hooks/usePhaseState";
 import { SEMESTER_PHASES } from "../services/localSemesterRepository";
-import { formatSchedule } from "../domain/schedule";
+import { WEEKDAYS, formatMinutes, formatSchedule, type DayOfWeek } from "../domain/schedule";
 import { localCourseRepository, type CourseState } from "../services/localCourseRepository";
 
 type CourseAction =
@@ -33,6 +33,17 @@ type CourseAction =
 
 const MIN_COURSES = 2;
 const MAX_COURSES = 4;
+const SCHEDULE_START_MINUTES = 8 * 60;
+const SCHEDULE_END_MINUTES = 20 * 60;
+const SCHEDULE_HOUR_HEIGHT = 64;
+const COURSE_COLORS = [
+  "border-emerald-500 bg-emerald-100 text-emerald-950",
+  "border-rose-500 bg-rose-100 text-rose-950",
+  "border-amber-500 bg-amber-100 text-amber-950",
+  "border-violet-500 bg-violet-100 text-violet-950",
+  "border-sky-500 bg-sky-100 text-sky-950",
+  "border-cyan-500 bg-cyan-100 text-cyan-950",
+];
 
 export function Registration() {
   const { user } = useAuth();
@@ -131,6 +142,7 @@ export function Registration() {
   };
 
   const totalCredits = enrollment.enrolled.reduce((sum, course) => sum + course.credits, 0);
+  const registeredCourses = [...enrollment.enrolled, ...enrollment.waitlisted];
 
   return (
     <div className="space-y-6">
@@ -214,6 +226,12 @@ export function Registration() {
           {feedback.message}
         </div>
       )}
+
+      <ScheduleBuilder
+        registeredCourses={registeredCourses}
+        waitlistedCourseIds={new Set(enrollment.waitlisted.map((course) => course.id))}
+        totalCredits={totalCredits}
+      />
 
       <div className="grid gap-6 xl:grid-cols-[1.65fr_0.9fr]">
         <Card>
@@ -398,5 +416,212 @@ export function Registration() {
         </Card>
       </div>
     </div>
+  );
+}
+
+function colorForCourse(index: number) {
+  return COURSE_COLORS[index % COURSE_COLORS.length];
+}
+
+function timeMarks() {
+  const marks: number[] = [];
+  for (let minutes = SCHEDULE_START_MINUTES; minutes <= SCHEDULE_END_MINUTES; minutes += 60) {
+    marks.push(minutes);
+  }
+  return marks;
+}
+
+function clampToSchedule(minutes: number) {
+  return Math.min(Math.max(minutes, SCHEDULE_START_MINUTES), SCHEDULE_END_MINUTES);
+}
+
+function blockStyle(course: CourseState) {
+  const start = clampToSchedule(course.schedule.startMinutes);
+  const end = clampToSchedule(course.schedule.endMinutes);
+  const total = SCHEDULE_END_MINUTES - SCHEDULE_START_MINUTES;
+  return {
+    top: `${((start - SCHEDULE_START_MINUTES) / total) * 100}%`,
+    height: `${Math.max(((end - start) / total) * 100, 6)}%`,
+  };
+}
+
+function ScheduleBuilder({
+  registeredCourses,
+  waitlistedCourseIds,
+  totalCredits,
+}: {
+  registeredCourses: CourseState[];
+  waitlistedCourseIds: Set<string>;
+  totalCredits: number;
+}) {
+  const marks = timeMarks();
+  const scheduleHeight = ((SCHEDULE_END_MINUTES - SCHEDULE_START_MINUTES) / 60) * SCHEDULE_HOUR_HEIGHT;
+  const courseColorById = new Map(registeredCourses.map((course, index) => [course.id, colorForCourse(index)]));
+  const blocks = registeredCourses.flatMap((course) =>
+    course.schedule.days.map((day) => ({
+      course,
+      day,
+      color: courseColorById.get(course.id) ?? COURSE_COLORS[0],
+    })),
+  );
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-blue-700" />
+            <div>
+              <h2 className="text-xl text-slate-950">Schedule Builder</h2>
+              <p className="mt-1 text-sm text-slate-600">Weekly view of your enrolled and waitlisted classes.</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <Badge variant="neutral">Result 1 of 1</Badge>
+            <Badge variant={registeredCourses.length >= MIN_COURSES ? "success" : "warning"}>
+              {registeredCourses.length}/{MAX_COURSES} courses
+            </Badge>
+            <Badge variant="info">{totalCredits} credits</Badge>
+          </div>
+        </div>
+      </CardHeader>
+      <CardBody>
+        <div className="grid gap-6 xl:grid-cols-[0.72fr_1.28fr]">
+          <div className="space-y-3">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-950">Selected courses</p>
+                  <p className="mt-1 text-xs text-slate-600">These blocks appear on the calendar.</p>
+                </div>
+                <Badge variant="neutral">{registeredCourses.length}</Badge>
+              </div>
+            </div>
+
+            {registeredCourses.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-8 text-center">
+                <CheckCircle className="mx-auto h-8 w-8 text-slate-300" />
+                <p className="mt-3 text-sm text-slate-500">Enroll or join a waitlist to preview your schedule.</p>
+              </div>
+            ) : (
+              registeredCourses.map((course, index) => {
+                const isWaitlisted = waitlistedCourseIds.has(course.id);
+                return (
+                  <div key={course.id} className="flex gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                    <div className={`flex h-14 w-16 shrink-0 items-center justify-center rounded-xl border-l-4 text-center text-sm font-semibold ${colorForCourse(index)}`}>
+                      {course.id.split(/(?=\d)/)[0]}
+                      <br />
+                      {course.id.replace(/^\D+/, "")}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium text-slate-950">{course.name}</p>
+                        <Badge variant={isWaitlisted ? "warning" : "success"}>{isWaitlisted ? "Waitlisted" : "Enrolled"}</Badge>
+                      </div>
+                      <p className="mt-1 text-sm text-slate-600">{course.instructor}</p>
+                      <p className="mt-2 text-xs text-slate-500">{formatSchedule(course.schedule)}</p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="min-w-0">
+            <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-3 text-sm text-slate-600">
+                <span>Class details</span>
+                <span className="h-5 w-9 rounded-full bg-slate-200 p-0.5">
+                  <span className="block h-4 w-4 rounded-full bg-white shadow-sm" />
+                </span>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-slate-600">
+                Sort by
+                <select className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900">
+                  <option>Earliest start</option>
+                  <option>Course code</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+              <div className="min-w-[820px]">
+                <div className="grid grid-cols-[72px_repeat(5,minmax(0,1fr))] border-b border-slate-200 bg-slate-100">
+                  <div className="px-3 py-3 text-xs uppercase tracking-[0.14em] text-slate-500">Time</div>
+                  {WEEKDAYS.map((day) => (
+                    <div key={day} className="border-l border-slate-200 px-3 py-3 text-center text-sm font-medium text-slate-950">
+                      {day}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-[72px_repeat(5,minmax(0,1fr))]">
+                  <div className="relative bg-slate-50" style={{ height: scheduleHeight }}>
+                    {marks.map((mark) => (
+                      <div
+                        key={mark}
+                        className="absolute right-2 -translate-y-2 text-xs text-slate-500"
+                        style={{ top: `${((mark - SCHEDULE_START_MINUTES) / (SCHEDULE_END_MINUTES - SCHEDULE_START_MINUTES)) * 100}%` }}
+                      >
+                        {formatMinutes(mark).replace(":00", "")}
+                      </div>
+                    ))}
+                  </div>
+
+                  {WEEKDAYS.map((day) => (
+                    <div key={day} className="relative border-l border-slate-200" style={{ height: scheduleHeight }}>
+                      {marks.map((mark) => (
+                        <div
+                          key={`${day}-${mark}`}
+                          className="absolute left-0 right-0 border-t border-slate-100"
+                          style={{ top: `${((mark - SCHEDULE_START_MINUTES) / (SCHEDULE_END_MINUTES - SCHEDULE_START_MINUTES)) * 100}%` }}
+                        />
+                      ))}
+
+                      {blocks
+                        .filter((block) => block.day === day)
+                        .map(({ course, color }) => {
+                          const isWaitlisted = waitlistedCourseIds.has(course.id);
+                          return (
+                            <div
+                              key={`${course.id}-${day}`}
+                              className={`absolute left-1 right-1 overflow-hidden rounded-xl border-l-4 px-2 py-2 text-center text-xs shadow-sm ${color} ${isWaitlisted ? "opacity-70" : ""}`}
+                              style={blockStyle(course)}
+                            >
+                              <p className="font-semibold leading-tight">{course.id}</p>
+                              <p className="leading-tight">LEC</p>
+                              <p className="mt-1 truncate leading-tight">{course.name}</p>
+                              <p className="mt-1 leading-tight">{formatMinutes(course.schedule.startMinutes)} - {formatMinutes(course.schedule.endMinutes)}</p>
+                              {isWaitlisted && <p className="mt-1 font-medium">Waitlist</p>}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <div className="mb-3 flex items-center justify-between text-sm">
+                <span className="font-medium text-slate-950">Term overview</span>
+                <span className="text-slate-500">Spring 2026</span>
+              </div>
+              <div className="space-y-2">
+                {registeredCourses.length === 0 ? (
+                  <div className="h-5 rounded-full bg-slate-200" />
+                ) : (
+                  registeredCourses.map((course, index) => (
+                    <div key={`term-${course.id}`} className={`h-5 rounded-full border ${colorForCourse(index)}`}>
+                      <span className="block truncate px-3 text-center text-xs leading-5">{course.name}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </CardBody>
+    </Card>
   );
 }
