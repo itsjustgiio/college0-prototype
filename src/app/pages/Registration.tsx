@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import {
   ArrowLeft,
@@ -29,6 +29,8 @@ type CourseAction =
   | { kind: "enroll" }
   | { kind: "waitlist" }
   | { kind: "retake" }
+  | { kind: "plan" }
+  | { kind: "drop-plan" }
   | { kind: "drop-enrollment" }
   | { kind: "drop-waitlist" }
   | { kind: "blocked"; reason: string };
@@ -47,6 +49,28 @@ const COURSE_COLORS = [
   "border-cyan-500 bg-cyan-100 text-cyan-950",
 ];
 
+const PLANNED_SCHEDULE_KEY = "college0.registration.plannedSchedule";
+
+function hasBrowserStorage() {
+  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+}
+
+function readPlannedCourseIds(email: string): string[] {
+  if (!hasBrowserStorage() || !email) return [];
+  const raw = window.localStorage.getItem(`${PLANNED_SCHEDULE_KEY}:${email.toLowerCase()}`);
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as string[];
+  } catch {
+    return [];
+  }
+}
+
+function writePlannedCourseIds(email: string, courseIds: string[]) {
+  if (!hasBrowserStorage() || !email) return;
+  window.localStorage.setItem(`${PLANNED_SCHEDULE_KEY}:${email.toLowerCase()}`, JSON.stringify(courseIds));
+}
+
 export function Registration() {
   const { user } = useAuth();
   const email = user?.email ?? "";
@@ -57,7 +81,31 @@ export function Registration() {
   const isRegistrationOpen = !suspension && (phase === "registration" || inSpecialReReg);
   const courses = useCourses();
   const enrollment = useStudentEnrollment(email);
+  const [plannedCourseIds, setPlannedCourseIds] = useState<string[]>(() => readPlannedCourseIds(email));
   const [feedback, setFeedback] = useState<{ kind: "success" | "error" | "info"; message: string } | null>(null);
+  const plannedCourses = courses.filter(
+    (course) =>
+      plannedCourseIds.includes(course.id) &&
+      !course.enrolledStudentIds.includes(email.toLowerCase()) &&
+      !course.waitlistStudentIds.includes(email.toLowerCase()),
+  );
+
+  useEffect(() => {
+    setPlannedCourseIds(readPlannedCourseIds(email));
+  }, [email]);
+
+  const savePlannedCourseIds = (nextCourseIds: string[]) => {
+    setPlannedCourseIds(nextCourseIds);
+    writePlannedCourseIds(email, nextCourseIds);
+  };
+
+  const hasConflictWithPlannedSchedule = (candidate: CourseState): CourseState | null => {
+    const candidates = [...enrollment.enrolled, ...plannedCourses].filter((course) => course.id !== candidate.id);
+    return candidates.find((course) => {
+      const sharedDay = course.schedule.days.some((day) => candidate.schedule.days.includes(day));
+      return sharedDay && course.schedule.startMinutes < candidate.schedule.endMinutes && candidate.schedule.startMinutes < course.schedule.endMinutes;
+    }) ?? null;
+  };
 
   const decideAction = (course: CourseState): CourseAction => {
     if (enrollment.enrolled.some((entry) => entry.id === course.id)) {
@@ -72,10 +120,13 @@ export function Registration() {
     if (suspension) {
       return { kind: "blocked", reason: "Suspended students cannot register this semester." };
     }
+    if (plannedCourseIds.includes(course.id) && !isRegistrationOpen) {
+      return { kind: "drop-plan" };
+    }
     if (enrollment.hasPassed(course)) {
       return { kind: "blocked", reason: `Already completed with grade ${enrollment.priorGrade(course)}` };
     }
-    const conflict = enrollment.hasConflictWith(course);
+    const conflict = hasConflictWithPlannedSchedule(course);
     if (conflict) {
       return { kind: "blocked", reason: `Time conflict with ${conflict.id}` };
     }
@@ -88,6 +139,9 @@ export function Registration() {
     }
     if (enrollment.priorGrade(course) === "F") {
       return { kind: "retake" };
+    }
+    if (!isRegistrationOpen) {
+      return { kind: "plan" };
     }
     return { kind: "enroll" };
   };
@@ -122,6 +176,19 @@ export function Registration() {
           });
           return;
         }
+        case "plan": {
+          savePlannedCourseIds(Array.from(new Set([...plannedCourseIds, course.id])));
+          setFeedback({
+            kind: "info",
+            message: `${course.id} saved to your planned schedule. Enrollment opens during the registration phase.`,
+          });
+          return;
+        }
+        case "drop-plan": {
+          savePlannedCourseIds(plannedCourseIds.filter((id) => id !== course.id));
+          setFeedback({ kind: "success", message: `Removed ${course.id} from your planned schedule.` });
+          return;
+        }
         case "drop-enrollment": {
           localCourseRepository.drop(course.id, email);
           setFeedback({ kind: "success", message: `Dropped ${course.id}.` });
@@ -144,7 +211,8 @@ export function Registration() {
   };
 
   const totalCredits = enrollment.enrolled.reduce((sum, course) => sum + course.credits, 0);
-  const registeredCourses = [...enrollment.enrolled, ...enrollment.waitlisted];
+  const plannedCredits = plannedCourses.reduce((sum, course) => sum + course.credits, 0);
+  const registeredCourses = [...enrollment.enrolled, ...enrollment.waitlisted, ...plannedCourses];
 
   return (
     <div className="space-y-6">
@@ -191,7 +259,7 @@ export function Registration() {
                 : (
                     <>
                       The system is currently in the <span className="font-medium">{SEMESTER_PHASES.find((entry) => entry.id === phase)?.label}</span> phase.
-                      Enroll, drop, and waitlist actions reopen when the registrar returns the cycle to Registration.
+                      You can still save classes to your planned schedule now; actual enroll and waitlist actions reopen when the registrar returns the cycle to Registration.
                     </>
                   )}
             </p>
@@ -232,7 +300,9 @@ export function Registration() {
       <ScheduleBuilder
         registeredCourses={registeredCourses}
         waitlistedCourseIds={new Set(enrollment.waitlisted.map((course) => course.id))}
-        totalCredits={totalCredits}
+        plannedCourseIds={new Set(plannedCourses.map((course) => course.id))}
+        totalCredits={totalCredits + plannedCredits}
+        registrationOpen={isRegistrationOpen}
       />
 
       <div className="grid gap-6 xl:grid-cols-[1.65fr_0.9fr]">
@@ -253,12 +323,17 @@ export function Registration() {
                 const enrolledCount = course.enrolledStudentIds.length;
                 const waitlistCount = course.waitlistStudentIds.length;
                 const seatsLeft = course.seats - enrolledCount;
-                const isInteractive = isRegistrationOpen && action.kind !== "blocked";
+                const isPlanningAction = action.kind === "plan" || action.kind === "drop-plan";
+                const isInteractive = (isRegistrationOpen || isPlanningAction) && action.kind !== "blocked";
                 const buttonLabel =
                   action.kind === "drop-enrollment"
                     ? "Drop"
                     : action.kind === "drop-waitlist"
                       ? "Leave waitlist"
+                      : action.kind === "drop-plan"
+                        ? "Remove plan"
+                        : action.kind === "plan"
+                          ? "Plan"
                       : action.kind === "waitlist"
                         ? "Join waitlist"
                         : action.kind === "retake"
@@ -271,6 +346,10 @@ export function Registration() {
                     ? "outline"
                     : action.kind === "waitlist"
                       ? "secondary"
+                      : action.kind === "plan"
+                        ? "secondary"
+                        : action.kind === "drop-plan"
+                          ? "outline"
                       : action.kind === "retake"
                         ? "outline"
                         : "primary";
@@ -294,6 +373,7 @@ export function Registration() {
                         {course.cancelled && <Badge variant="danger">Cancelled</Badge>}
                         {action.kind === "drop-enrollment" && <Badge variant="success">Enrolled</Badge>}
                         {action.kind === "drop-waitlist" && <Badge variant="warning">Waitlisted</Badge>}
+                        {action.kind === "drop-plan" && <Badge variant="info">Planned</Badge>}
                         {action.kind === "waitlist" && <Badge variant="warning">Waitlist only</Badge>}
                         {action.kind === "retake" && <Badge variant="info">Retake eligible</Badge>}
                       </div>
@@ -392,6 +472,7 @@ export function Registration() {
                 <h3 className="text-sm font-medium text-slate-950">Your schedule</h3>
                 {[...enrollment.enrolled, ...enrollment.waitlisted].map((course) => {
                   const isWaitlisted = enrollment.waitlisted.some((entry) => entry.id === course.id);
+                  const isPlanned = plannedCourses.some((entry) => entry.id === course.id);
                   return (
                     <div key={course.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                       <div className="flex items-center justify-between gap-3">
@@ -399,8 +480,8 @@ export function Registration() {
                           <div className="text-sm font-medium text-slate-950">{course.id}</div>
                           <div className="mt-1 text-xs text-slate-600">{course.name}</div>
                         </div>
-                        <Badge variant={isWaitlisted ? "warning" : "success"}>
-                          {isWaitlisted ? "Waitlist" : "Enrolled"}
+                        <Badge variant={isPlanned ? "info" : isWaitlisted ? "warning" : "success"}>
+                          {isPlanned ? "Planned" : isWaitlisted ? "Waitlist" : "Enrolled"}
                         </Badge>
                       </div>
                       <div className="mt-2 text-xs text-slate-500">{formatSchedule(course.schedule)}</div>
@@ -450,11 +531,15 @@ function blockStyle(course: CourseState) {
 function ScheduleBuilder({
   registeredCourses,
   waitlistedCourseIds,
+  plannedCourseIds,
   totalCredits,
+  registrationOpen,
 }: {
   registeredCourses: CourseState[];
   waitlistedCourseIds: Set<string>;
+  plannedCourseIds: Set<string>;
   totalCredits: number;
+  registrationOpen: boolean;
 }) {
   const [selectedOpen, setSelectedOpen] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -522,6 +607,7 @@ function ScheduleBuilder({
                 ) : (
                   registeredCourses.map((course, index) => {
                     const isWaitlisted = waitlistedCourseIds.has(course.id);
+                    const isPlanned = plannedCourseIds.has(course.id);
                     return (
                       <div key={course.id} className="flex gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
                         <div className={`flex h-14 w-16 shrink-0 items-center justify-center rounded-xl border-l-4 text-center text-sm font-semibold ${colorForCourse(index)}`}>
@@ -532,7 +618,9 @@ function ScheduleBuilder({
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="font-medium text-slate-950">{course.name}</p>
-                            <Badge variant={isWaitlisted ? "warning" : "success"}>{isWaitlisted ? "Waitlisted" : "Enrolled"}</Badge>
+                            <Badge variant={isPlanned ? "info" : isWaitlisted ? "warning" : "success"}>
+                              {isPlanned ? "Planned" : isWaitlisted ? "Waitlisted" : "Enrolled"}
+                            </Badge>
                           </div>
                           <p className="mt-1 text-sm text-slate-600">{course.instructor}</p>
                           <p className="mt-2 text-xs text-slate-500">{formatSchedule(course.schedule)}</p>
@@ -616,10 +704,11 @@ function ScheduleBuilder({
                         .filter((block) => block.day === day)
                         .map(({ course, color }) => {
                           const isWaitlisted = waitlistedCourseIds.has(course.id);
+                          const isPlanned = plannedCourseIds.has(course.id);
                           return (
                             <div
                               key={`${course.id}-${day}`}
-                              className={`absolute left-1 right-1 overflow-hidden rounded-xl border-l-4 px-2 py-2 text-center text-xs shadow-sm ${color} ${isWaitlisted ? "opacity-70" : ""}`}
+                              className={`absolute left-1 right-1 overflow-hidden rounded-xl border-l-4 px-2 py-2 text-center text-xs shadow-sm ${color} ${isWaitlisted || isPlanned ? "opacity-75" : ""}`}
                               style={blockStyle(course)}
                             >
                               <p className="font-semibold leading-tight">{course.id}</p>
@@ -631,6 +720,7 @@ function ScheduleBuilder({
                               )}
                               <p className="mt-1 leading-tight">{formatMinutes(course.schedule.startMinutes)} - {formatMinutes(course.schedule.endMinutes)}</p>
                               {isWaitlisted && <p className="mt-1 font-medium">Waitlist</p>}
+                              {isPlanned && <p className="mt-1 font-medium">Planned</p>}
                             </div>
                           );
                         })}
@@ -655,6 +745,33 @@ function ScheduleBuilder({
                     </div>
                   ))
                 )}
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-start gap-3 text-sm">
+                <CheckCircle className={`mt-0.5 h-5 w-5 ${registrationOpen ? "text-emerald-600" : "text-blue-600"}`} />
+                <div>
+                  <p className="font-medium text-slate-950">
+                    {registrationOpen ? "Registration is open" : "Saved as a planned schedule"}
+                  </p>
+                  <p className="mt-1 text-slate-600">
+                    {registrationOpen
+                      ? "Use Enroll or Join waitlist from the course list to make this official."
+                      : "Your calendar is saved for planning. Enroll and waitlist actions remain locked until the registration phase."}
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button variant="outline" disabled={registeredCourses.length === 0}>
+                  Save as favorite
+                </Button>
+                <Button variant="secondary" disabled={!registrationOpen || registeredCourses.length === 0}>
+                  Validate shopping cart
+                </Button>
+                <Button variant="primary" disabled={!registrationOpen || registeredCourses.length === 0}>
+                  Continue
+                </Button>
               </div>
             </div>
           </div>
