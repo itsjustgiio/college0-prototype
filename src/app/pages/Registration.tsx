@@ -567,6 +567,16 @@ function blockStyle(input: { startMinutes: number; endMinutes: number }) {
   };
 }
 
+function sectionLetter(index: number) {
+  return String.fromCharCode(65 + (index % 8));
+}
+
+function roomForCourse(course: CourseState) {
+  const rooms = ["Shepard Hall Rm S-210", "Steinman Hall Rm 161", "North Academic Center Rm 1/203", "Marshak Science Building Rm MR3", "Shepard Hall Rm S-276"];
+  const index = course.id.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0) % rooms.length;
+  return rooms[index];
+}
+
 function ScheduleBuilder({
   registeredCourses,
   waitlistedCourseIds,
@@ -762,81 +772,142 @@ function ScheduleBuilder({
                   <ChevronsRight className="h-8 w-8" />
                 </div>
 
-                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                  <div className="min-w-[760px]">
-                    <div className="grid grid-cols-[72px_repeat(5,minmax(0,1fr))] border-b border-slate-200 bg-slate-200">
-                      <div className="px-3 py-3 text-xs uppercase tracking-[0.14em] text-slate-500">Time</div>
-                      {WEEKDAYS.map((day) => (
-                        <div key={day} className="border-l border-slate-300 px-3 py-3 text-center text-sm font-medium text-slate-950">
-                          {day}
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="grid grid-cols-[72px_repeat(5,minmax(0,1fr))]">
-                      <div className="relative bg-slate-50" style={{ height: scheduleHeight }}>
-                        {marks.map((mark) => (
-                          <div
-                            key={mark}
-                            className="absolute right-2 -translate-y-2 text-xs text-slate-500"
-                            style={{ top: `${((mark - SCHEDULE_START_MINUTES) / (SCHEDULE_END_MINUTES - SCHEDULE_START_MINUTES)) * 100}%` }}
-                          >
-                            {formatMinutes(mark).replace(":00", "")}
+                {detailsOpen ? (
+                  <div className="max-h-[560px] overflow-y-auto rounded-xl border border-slate-200 bg-white">
+                    {registeredCourses.length === 0 ? (
+                      <div className="px-5 py-10 text-center text-sm text-slate-500">
+                        Add planned, enrolled, or waitlisted classes to see full class details.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-200">
+                        {registeredCourses.map((course, index) => {
+                          const isWaitlisted = waitlistedCourseIds.has(course.id);
+                          const isPlanned = plannedCourseIds.has(course.id);
+                          const seatsTaken = course.enrolledStudentIds.length;
+                          const full = seatsTaken >= course.seats;
+                          return (
+                            <div key={`details-${course.id}`} className="bg-white">
+                              <div className={`grid gap-3 px-4 py-3 md:grid-cols-[1fr_auto] ${colorForCourse(index)}`}>
+                                <div>
+                                  <h3 className="text-lg font-semibold">{course.id}</h3>
+                                  <p>{course.name}</p>
+                                  <p>{formatSchedule(course.schedule)}</p>
+                                </div>
+                                <div className="text-left md:text-right">
+                                  <p>2026 Spring Term: Jan 26 - May 26</p>
+                                  <p>Regular Academic Session</p>
+                                </div>
+                              </div>
+                              <div className="grid gap-4 px-4 py-4 md:grid-cols-[1fr_auto]">
+                                <div className="space-y-2">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-lg font-semibold">LEC {sectionLetter(index)}</span>
+                                    <Badge variant={isPlanned ? "info" : isWaitlisted ? "warning" : "success"}>
+                                      {isPlanned ? "Planned" : isWaitlisted ? "Waitlisted" : "Enrolled"}
+                                    </Badge>
+                                    <span className="text-slate-700">{34400 + index * 37}</span>
+                                  </div>
+                                  <div className="text-slate-800">
+                                    <p>
+                                      Seats: <span className={full ? "text-red-600" : ""}>{full ? "Full" : `${seatsTaken}/${course.seats}`}</span>
+                                    </p>
+                                    <p>Wait List: {course.waitlistStudentIds.length ? course.waitlistStudentIds.length : "None"}</p>
+                                  </div>
+                                  <div className="text-sm text-slate-700">
+                                    <p>PRE: Department permission or equivalent preparation.</p>
+                                    <p>Course Attributes: Graduate program course, schedule-builder eligible.</p>
+                                    <p>
+                                      <span className="font-semibold">Book Title:</span> College0 Course Reader{" "}
+                                      <span className="font-semibold">Author:</span> College0 Faculty{" "}
+                                      <span className="font-semibold">Price:</span> 55.46 USD
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="text-left text-slate-900 md:min-w-60 md:text-right">
+                                  <p>City College</p>
+                                  <p>In Person</p>
+                                  <p>{roomForCourse(course)}</p>
+                                  <p>{course.instructor}</p>
+                                  <p>{course.credits.toFixed(1)}/{course.credits.toFixed(1)} Progress Units</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                    <div className="min-w-[760px]">
+                      <div className="grid grid-cols-[72px_repeat(5,minmax(0,1fr))] border-b border-slate-200 bg-slate-200">
+                        <div className="px-3 py-3 text-xs uppercase tracking-[0.14em] text-slate-500">Time</div>
+                        {WEEKDAYS.map((day) => (
+                          <div key={day} className="border-l border-slate-300 px-3 py-3 text-center text-sm font-medium text-slate-950">
+                            {day}
                           </div>
                         ))}
                       </div>
 
-                      {WEEKDAYS.map((day) => (
-                        <div key={day} className="relative border-l border-slate-200" style={{ height: scheduleHeight }}>
+                      <div className="grid grid-cols-[72px_repeat(5,minmax(0,1fr))]">
+                        <div className="relative bg-slate-50" style={{ height: scheduleHeight }}>
                           {marks.map((mark) => (
                             <div
-                              key={`${day}-${mark}`}
-                              className="absolute left-0 right-0 border-t border-slate-100"
+                              key={mark}
+                              className="absolute right-2 -translate-y-2 text-xs text-slate-500"
                               style={{ top: `${((mark - SCHEDULE_START_MINUTES) / (SCHEDULE_END_MINUTES - SCHEDULE_START_MINUTES)) * 100}%` }}
-                            />
+                            >
+                              {formatMinutes(mark).replace(":00", "")}
+                            </div>
                           ))}
-
-                          {blocks
-                            .filter((block) => block.day === day)
-                            .map(({ course, color }) => {
-                              const isWaitlisted = waitlistedCourseIds.has(course.id);
-                              const isPlanned = plannedCourseIds.has(course.id);
-                              return (
-                                <div
-                                  key={`${course.id}-${day}`}
-                                  className={`absolute left-1 right-1 overflow-hidden rounded-sm border-l-4 px-2 py-2 text-center text-xs shadow-sm ${color} ${isWaitlisted || isPlanned ? "opacity-75" : ""}`}
-                                  style={blockStyle(course.schedule)}
-                                >
-                                  <p className="font-semibold leading-tight">{course.id}</p>
-                                  {detailsOpen && (
-                                    <>
-                                      <p className="leading-tight">LEC</p>
-                                      <p className="mt-1 truncate leading-tight">{course.name}</p>
-                                    </>
-                                  )}
-                                  <p className="mt-1 leading-tight">{formatMinutes(course.schedule.startMinutes)} - {formatMinutes(course.schedule.endMinutes)}</p>
-                                  {isWaitlisted && <p className="mt-1 font-medium">Waitlist</p>}
-                                  {isPlanned && <p className="mt-1 font-medium">Planned</p>}
-                                </div>
-                              );
-                            })}
-                          {personalTimes
-                            .filter((block) => block.day === day)
-                            .map((block) => (
-                              <div
-                                key={block.id}
-                                className="absolute left-1 right-1 overflow-hidden rounded-sm border-l-4 border-slate-600 bg-slate-200 px-2 py-2 text-center text-xs text-slate-800 shadow-sm"
-                                style={blockStyle(block)}
-                              >
-                                <p className="font-semibold leading-tight">{block.title}</p>
-                                <p className="mt-1 leading-tight">{formatMinutes(block.startMinutes)} - {formatMinutes(block.endMinutes)}</p>
-                              </div>
-                            ))}
                         </div>
-                      ))}
+
+                        {WEEKDAYS.map((day) => (
+                          <div key={day} className="relative border-l border-slate-200" style={{ height: scheduleHeight }}>
+                            {marks.map((mark) => (
+                              <div
+                                key={`${day}-${mark}`}
+                                className="absolute left-0 right-0 border-t border-slate-100"
+                                style={{ top: `${((mark - SCHEDULE_START_MINUTES) / (SCHEDULE_END_MINUTES - SCHEDULE_START_MINUTES)) * 100}%` }}
+                              />
+                            ))}
+
+                            {blocks
+                              .filter((block) => block.day === day)
+                              .map(({ course, color }) => {
+                                const isWaitlisted = waitlistedCourseIds.has(course.id);
+                                const isPlanned = plannedCourseIds.has(course.id);
+                                return (
+                                  <div
+                                    key={`${course.id}-${day}`}
+                                    className={`absolute left-1 right-1 overflow-hidden rounded-sm border-l-4 px-2 py-2 text-center text-xs shadow-sm ${color} ${isWaitlisted || isPlanned ? "opacity-75" : ""}`}
+                                    style={blockStyle(course.schedule)}
+                                  >
+                                    <p className="font-semibold leading-tight">{course.id}</p>
+                                    <p className="mt-1 leading-tight">{formatMinutes(course.schedule.startMinutes)} - {formatMinutes(course.schedule.endMinutes)}</p>
+                                    {isWaitlisted && <p className="mt-1 font-medium">Waitlist</p>}
+                                    {isPlanned && <p className="mt-1 font-medium">Planned</p>}
+                                  </div>
+                                );
+                              })}
+                            {personalTimes
+                              .filter((block) => block.day === day)
+                              .map((block) => (
+                                <div
+                                  key={block.id}
+                                  className="absolute left-1 right-1 overflow-hidden rounded-sm border-l-4 border-slate-600 bg-slate-200 px-2 py-2 text-center text-xs text-slate-800 shadow-sm"
+                                  style={blockStyle(block)}
+                                >
+                                  <p className="font-semibold leading-tight">{block.title}</p>
+                                  <p className="mt-1 leading-tight">{formatMinutes(block.startMinutes)} - {formatMinutes(block.endMinutes)}</p>
+                                </div>
+                              ))}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
               <div className="mb-3 flex items-center justify-between text-sm">
