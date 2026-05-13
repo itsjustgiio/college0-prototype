@@ -576,6 +576,10 @@ function personalTimeStyle(block: PersonalTimeBlock) {
   };
 }
 
+function timesOverlap(firstStart: number, firstEnd: number, secondStart: number, secondEnd: number) {
+  return firstStart < secondEnd && secondStart < firstEnd;
+}
+
 function sectionLetter(index: number) {
   return String.fromCharCode(65 + (index % 8));
 }
@@ -620,6 +624,29 @@ function ScheduleBuilder({
       color: courseColorById.get(course.id) ?? COURSE_COLORS[0],
     })),
   );
+
+  const personalStartParts = personalStart.split(":").map(Number);
+  const personalEndParts = personalEnd.split(":").map(Number);
+  const draftStartMinutes = personalStartParts[0] * 60 + personalStartParts[1];
+  const draftEndMinutes = personalEndParts[0] * 60 + personalEndParts[1];
+  const draftIsValid = personalTitle.trim().length > 0 && draftStartMinutes < draftEndMinutes;
+
+  const conflictingCoursesForPersonalTime = (block: Pick<PersonalTimeBlock, "day" | "startMinutes" | "endMinutes">) =>
+    registeredCourses.filter(
+      (course) =>
+        course.schedule.days.includes(block.day) &&
+        timesOverlap(block.startMinutes, block.endMinutes, course.schedule.startMinutes, course.schedule.endMinutes),
+    );
+
+  const draftConflicts = draftIsValid
+    ? conflictingCoursesForPersonalTime({
+        day: personalDay,
+        startMinutes: draftStartMinutes,
+        endMinutes: draftEndMinutes,
+      })
+    : [];
+
+  const conflictNames = (courses: CourseState[]) => courses.map((course) => course.id).join(", ");
 
   const addPersonalTime = () => {
     const [startHour, startMinute] = personalStart.split(":").map(Number);
@@ -903,18 +930,31 @@ function ScheduleBuilder({
                               })}
                             {personalTimes
                               .filter((block) => block.day === day)
-                              .map((block) => (
-                                <div
-                                  key={block.id}
-                                  className="absolute left-0 right-0 z-10 overflow-hidden border-y border-slate-600 bg-slate-700/75 px-2 py-2 text-center text-xs text-white shadow-inner"
-                                  style={personalTimeStyle(block)}
-                                >
-                                  <div className="flex h-full flex-col items-center justify-center">
-                                    <p className="font-semibold leading-tight">{block.title}</p>
-                                    <p className="mt-1 leading-tight">{formatMinutes(block.startMinutes)} - {formatMinutes(block.endMinutes)}</p>
+                              .map((block) => {
+                                const conflicts = conflictingCoursesForPersonalTime(block);
+                                const hasConflict = conflicts.length > 0;
+                                return (
+                                  <div
+                                    key={block.id}
+                                    className={`absolute left-0 right-0 z-10 overflow-hidden border-y px-2 py-2 text-center text-xs text-white shadow-inner ${
+                                      hasConflict ? "border-rose-400 bg-rose-900/75" : "border-slate-600 bg-slate-700/75"
+                                    }`}
+                                    style={personalTimeStyle(block)}
+                                  >
+                                    <div className="flex h-full flex-col items-center justify-center">
+                                      {hasConflict && (
+                                        <div className="mb-1 inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                                          <AlertCircle className="h-3 w-3" />
+                                          Conflict
+                                        </div>
+                                      )}
+                                      <p className="font-semibold leading-tight">{block.title}</p>
+                                      <p className="mt-1 leading-tight">{formatMinutes(block.startMinutes)} - {formatMinutes(block.endMinutes)}</p>
+                                      {hasConflict && <p className="mt-1 leading-tight">Interferes with {conflictNames(conflicts)}</p>}
+                                    </div>
                                   </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                           </div>
                         ))}
                       </div>
@@ -999,23 +1039,46 @@ function ScheduleBuilder({
                     </Button>
                   </div>
 
+                  {draftConflicts.length > 0 && (
+                    <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <p>
+                        This personal time interferes with {conflictNames(draftConflicts)}. You can still save it as blocked time, but it conflicts with your schedule.
+                      </p>
+                    </div>
+                  )}
+
                   {personalTimes.length > 0 && (
                     <div className="space-y-2">
-                      {personalTimes.map((block) => (
-                        <div key={block.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-                          <span className="text-slate-700">
-                            <span className="font-medium text-slate-950">{block.title}</span> - {block.day} {formatMinutes(block.startMinutes)} to {formatMinutes(block.endMinutes)}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => removePersonalTime(block.id)}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200 hover:text-slate-900"
-                            aria-label={`Remove ${block.title}`}
+                      {personalTimes.map((block) => {
+                        const conflicts = conflictingCoursesForPersonalTime(block);
+                        return (
+                          <div
+                            key={block.id}
+                            className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-sm ${
+                              conflicts.length > 0 ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-slate-50"
+                            }`}
                           >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))}
+                            <span className="text-slate-700">
+                              <span className="font-medium text-slate-950">{block.title}</span> - {block.day} {formatMinutes(block.startMinutes)} to {formatMinutes(block.endMinutes)}
+                              {conflicts.length > 0 && (
+                                <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                                  <AlertCircle className="h-3 w-3" />
+                                  Interferes with {conflictNames(conflicts)}
+                                </span>
+                              )}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removePersonalTime(block.id)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                              aria-label={`Remove ${block.title}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
