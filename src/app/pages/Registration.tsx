@@ -567,6 +567,15 @@ function blockStyle(input: { startMinutes: number; endMinutes: number }) {
   };
 }
 
+function personalTimeStyle(block: PersonalTimeBlock) {
+  const durationHours = Math.max((block.endMinutes - block.startMinutes) / 60, 0.5);
+  return {
+    ...blockStyle(block),
+    backgroundImage: "linear-gradient(to bottom, rgba(255,255,255,0.18) 1px, transparent 1px)",
+    backgroundSize: `100% ${100 / durationHours}%`,
+  };
+}
+
 function sectionLetter(index: number) {
   return String.fromCharCode(65 + (index % 8));
 }
@@ -895,11 +904,13 @@ function ScheduleBuilder({
                               .map((block) => (
                                 <div
                                   key={block.id}
-                                  className="absolute left-1 right-1 overflow-hidden rounded-sm border-l-4 border-slate-600 bg-slate-200 px-2 py-2 text-center text-xs text-slate-800 shadow-sm"
-                                  style={blockStyle(block)}
+                                  className="absolute left-0 right-0 z-10 overflow-hidden border-y border-slate-600 bg-slate-700/75 px-2 py-2 text-center text-xs text-white shadow-inner"
+                                  style={personalTimeStyle(block)}
                                 >
-                                  <p className="font-semibold leading-tight">{block.title}</p>
-                                  <p className="mt-1 leading-tight">{formatMinutes(block.startMinutes)} - {formatMinutes(block.endMinutes)}</p>
+                                  <div className="flex h-full flex-col items-center justify-center">
+                                    <p className="font-semibold leading-tight">{block.title}</p>
+                                    <p className="mt-1 leading-tight">{formatMinutes(block.startMinutes)} - {formatMinutes(block.endMinutes)}</p>
+                                  </div>
                                 </div>
                               ))}
                           </div>
