@@ -1,4 +1,5 @@
 import { completedCourses, courses, enrolledCourses, students } from "../data/mockData";
+import { localCourseRepository } from "./localCourseRepository";
 
 export interface StudentAcademicProfile {
   id: number | string;
@@ -267,12 +268,13 @@ export const localCollegeRepository = {
       seededInstructorAssignments,
     );
     const assignedCourseIds = assignments[input.email];
+    const catalog = localCourseRepository.list();
 
     if (assignedCourseIds?.length) {
-      return courses.filter((course) => assignedCourseIds.includes(course.id));
+      return catalog.filter((course) => assignedCourseIds.includes(course.id));
     }
 
-    return courses.filter((course) => course.instructor === input.name);
+    return catalog.filter((course) => course.instructor === input.name);
   },
 
   getInstructorRoster(email: string) {

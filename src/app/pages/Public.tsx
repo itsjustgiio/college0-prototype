@@ -11,7 +11,7 @@ import {
   User,
   UserCog,
 } from "lucide-react";
-import { courses, students } from "../data/mockData";
+import { students } from "../data/mockData";
 import type { InstructorApplication, StudentApplication } from "../domain/admissions";
 import {
   Dialog,
@@ -23,10 +23,13 @@ import {
 } from "../components/ui/dialog";
 import { useSemesterPhase } from "../hooks/useSemesterPhase";
 import { SEMESTER_PHASES } from "../services/localSemesterRepository";
+import { useCourses } from "../hooks/useCourses";
+import { formatSchedule } from "../domain/schedule";
 
 export function Public() {
   const [phase, setPhase] = useSemesterPhase();
   const currentPhase = SEMESTER_PHASES.find((entry) => entry.id === phase) ?? SEMESTER_PHASES[1];
+  const courses = useCourses();
   const [classFilter, setClassFilter] = useState<"All" | "CS" | "Math" | "General Ed" | "Business">("All");
   const [studentForm, setStudentForm] = useState({ applicantName: "", email: "", gpa: "" });
   const [studentSubmitState, setStudentSubmitState] = useState<"idle" | "success" | "error">("idle");
@@ -212,10 +215,10 @@ export function Public() {
                         <div>
                           <p className="text-sm font-medium text-slate-950">{course.id} - {course.name}</p>
                           <p className="mt-1 text-sm text-slate-600">{course.instructor}</p>
-                          <p className="mt-1 text-xs text-slate-500">{course.time}</p>
+                          <p className="mt-1 text-xs text-slate-500">{formatSchedule(course.schedule)}</p>
                         </div>
                         <div className="flex items-center gap-4 text-sm md:justify-end">
-                          <span className="text-slate-600">{course.enrolled}/{course.seats} seats</span>
+                          <span className="text-slate-600">{course.enrolledStudentIds.length}/{course.seats} seats</span>
                           <span className="font-semibold text-amber-700">{course.rating.toFixed(1)} rating</span>
                         </div>
                       </div>

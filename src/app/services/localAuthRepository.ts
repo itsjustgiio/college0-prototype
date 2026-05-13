@@ -1,5 +1,6 @@
 import type { AuthCredentialRecord, AuthUser, UserRole } from "../auth/authTypes";
 import { courses, students } from "../data/mockData";
+import { deriveInstructorEmail } from "../domain/instructor";
 
 const STORAGE_KEYS = {
   credentials: "college0.auth.credentials",
@@ -18,22 +19,14 @@ const seededCredentials: AuthCredentialRecord[] = [
     password: "student123",
     mustChangePassword: false,
   })),
-  ...Array.from(new Set(courses.map((course) => course.instructor))).map((instructorName, index) => {
-    const email = instructorName
-      .replace(/^Dr\. |^Prof\. /, "")
-      .toLowerCase()
-      .replace(/\s+/g, ".")
-      .concat("@college0.edu");
-
-    return {
-      id: `instructor-${index + 1}`,
-      name: instructorName,
-      email,
-      role: "instructor" as const,
-      password: "faculty123",
-      mustChangePassword: false,
-    };
-  }),
+  ...Array.from(new Set(courses.map((course) => course.instructor))).map((instructorName, index) => ({
+    id: `instructor-${index + 1}`,
+    name: instructorName,
+    email: deriveInstructorEmail(instructorName),
+    role: "instructor" as const,
+    password: "faculty123",
+    mustChangePassword: false,
+  })),
   {
     id: "registrar-admin",
     name: "Admin User",

@@ -2,21 +2,15 @@ import { useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router";
 import { ArrowLeft, GraduationCap, LogIn } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
-import { courses, students } from "../data/mockData";
+import { students } from "../data/mockData";
+import { useCourses } from "../hooks/useCourses";
+import { deriveInstructorEmail } from "../domain/instructor";
 
-const demoAccounts = [
-  ...students.map((student) => ({ role: "Student", email: student.email, password: "student123" })),
-  ...Array.from(new Set(courses.map((course) => course.instructor))).map((instructorName) => ({
-    role: "Instructor",
-    email: instructorName
-      .replace(/^Dr\. |^Prof\. /, "")
-      .toLowerCase()
-      .replace(/\s+/g, ".")
-      .concat("@college0.edu"),
-    password: "faculty123",
-  })),
-  { role: "Registrar", email: "admin@college0.edu", password: "registrar123" },
-];
+interface DemoAccount {
+  role: string;
+  email: string;
+  password: string;
+}
 
 const roleSummaries = [
   { role: "Student", description: "Course planning, progress, and advising tools." },
@@ -27,10 +21,21 @@ const roleSummaries = [
 export function Login() {
   const navigate = useNavigate();
   const { user, signIn } = useAuth();
+  const courses = useCourses();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [expandedRole, setExpandedRole] = useState<string | null>(null);
+
+  const demoAccounts: DemoAccount[] = [
+    ...students.map((student) => ({ role: "Student", email: student.email, password: "student123" })),
+    ...Array.from(new Set(courses.map((course) => course.instructor))).map((instructorName) => ({
+      role: "Instructor",
+      email: deriveInstructorEmail(instructorName),
+      password: "faculty123",
+    })),
+    { role: "Registrar", email: "admin@college0.edu", password: "registrar123" },
+  ];
 
   if (user) {
     return <Navigate to={user.mustChangePassword ? "/change-password" : `/${user.role}`} replace />;

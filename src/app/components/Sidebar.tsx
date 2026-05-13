@@ -27,6 +27,7 @@ export function Sidebar({ role }: SidebarProps) {
   const registrarLinks = [
     { to: "/registrar", icon: Home, label: "Dashboard" },
     { to: "/registrar/applications", icon: FileText, label: "Applications" },
+    { to: "/registrar/class-setup", icon: BookOpen, label: "Class Setup" },
     { to: "/registrar/complaints", icon: MessageSquare, label: "Complaints" },
     { to: "/registrar/semester-control", icon: Settings, label: "Semester Control" },
   ];

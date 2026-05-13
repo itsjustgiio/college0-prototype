@@ -1,14 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
-import { FileText, MessageSquare, Settings, AlertTriangle, ShieldAlert, ClipboardList } from "lucide-react";
+import { BookOpen, CheckCircle, ClipboardList, FileText, GraduationCap, Lock, MessageSquare, Plus, Save, Settings, ShieldAlert, XCircle } from "lucide-react";
 import { Card, CardHeader, CardBody } from "../components/Card";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
-import { complaints, students, courses } from "../data/mockData";
+import { complaints, students } from "../data/mockData";
 import type { InstructorApplication, ProgramAdmissionSettings, StudentApplication } from "../domain/admissions";
 import { isStudentDecisionOverride } from "../domain/admissions";
 import { localAdmissionsRepository } from "../services/localAdmissionsRepository";
 import { useSemesterPhase } from "../hooks/useSemesterPhase";
 import { SEMESTER_PHASES, type SemesterPhase } from "../services/localSemesterRepository";
+import { localCourseRepository, type CourseEditableFields, type CourseState } from "../services/localCourseRepository";
+import { useCourses } from "../hooks/useCourses";
+import { useLastTransitionSummary } from "../hooks/usePhaseState";
+import { useAllGraduationApplications, usePendingGraduationApplications } from "../hooks/useGraduation";
+import { GRADUATION_THRESHOLD, localGraduationRepository } from "../services/localGraduationRepository";
+import { localPhaseStateRepository } from "../services/localPhaseStateRepository";
+import { localWarningsRepository } from "../services/localWarningsRepository";
+import { useAuth } from "../auth/AuthProvider";
+import { resolveStudentDisplayName } from "../domain/student";
+import {
+  WEEKDAYS,
+  formatSchedule,
+  isValidSchedule,
+  minutesToTimeInput,
+  parseTimeInputToMinutes,
+  type CourseSchedule,
+  type DayOfWeek,
+} from "../domain/schedule";
 
 const semesterPhaseDates: Record<SemesterPhase, { startDate: string; endDate: string }> = {
   setup: { startDate: "2026-03-15", endDate: "2026-04-14" },
@@ -46,6 +64,7 @@ function RegistrarHeader({
 export function RegistrarDashboard() {
   const [phase] = useSemesterPhase();
   const semesterPhases = useMemo(() => buildPhaseTimeline(phase), [phase]);
+  const courseCatalog = useCourses();
   const [pendingApplicationsCount, setPendingApplicationsCount] = useState(0);
 
   useEffect(() => {
@@ -84,7 +103,7 @@ export function RegistrarDashboard() {
         <Card>
           <CardBody>
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Courses</p>
-            <div className="mt-3 text-4xl text-slate-950">{courses.length}</div>
+            <div className="mt-3 text-4xl text-slate-950">{courseCatalog.length}</div>
             <div className="mt-2"><Badge variant="success">Spring 2026</Badge></div>
           </CardBody>
         </Card>
@@ -175,6 +194,7 @@ export function RegistrarDashboard() {
 }
 
 export function RegistrarApplicationsPage() {
+  const courseCatalog = useCourses();
   const [studentApplications, setStudentApplications] = useState<StudentApplication[]>([]);
   const [instructorApplications, setInstructorApplications] = useState<InstructorApplication[]>([]);
   const [admissionSettings, setAdmissionSettings] = useState<ProgramAdmissionSettings | null>(null);
@@ -508,7 +528,7 @@ export function RegistrarApplicationsPage() {
                       <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
                         <p className="text-sm font-medium text-slate-800">Assign classes before approval</p>
                         <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                          {courses.map((course) => {
+                          {courseCatalog.map((course) => {
                             const assignedCourseIds = instructorAssignments[application.id] ?? [];
                             const checked = assignedCourseIds.includes(course.id);
 
@@ -599,11 +619,463 @@ export function RegistrarComplaintsPage() {
   );
 }
 
+interface NewCourseForm {
+  id: string;
+  name: string;
+  instructor: string;
+  days: DayOfWeek[];
+  startTime: string;
+  endTime: string;
+  seats: string;
+  credits: string;
+}
+
+const emptyNewCourse: NewCourseForm = {
+  id: "",
+  name: "",
+  instructor: "",
+  days: [],
+  startTime: "09:00",
+  endTime: "10:30",
+  seats: "",
+  credits: "3",
+};
+
+function toggleDay(days: DayOfWeek[], day: DayOfWeek): DayOfWeek[] {
+  return days.includes(day) ? days.filter((entry) => entry !== day) : [...days, day];
+}
+
+function orderedDays(days: DayOfWeek[]): DayOfWeek[] {
+  return WEEKDAYS.filter((day) => days.includes(day));
+}
+
+export function RegistrarClassSetupPage() {
+  const [phase] = useSemesterPhase();
+  const isEditable = phase === "setup";
+  const courseStates = useCourses();
+  const [edits, setEdits] = useState<Record<string, Partial<CourseEditableFields>>>({});
+  const [newCourse, setNewCourse] = useState<NewCourseForm>(emptyNewCourse);
+  const [feedback, setFeedback] = useState<{ kind: "success" | "error"; message: string } | null>(null);
+
+  const getDraftValue = <K extends keyof CourseEditableFields>(
+    course: CourseState,
+    field: K,
+  ): CourseEditableFields[K] => {
+    const draft = edits[course.id];
+    if (draft && field in draft && draft[field] !== undefined) {
+      return draft[field] as CourseEditableFields[K];
+    }
+    return course[field];
+  };
+
+  const setDraftValue = <K extends keyof CourseEditableFields>(
+    courseId: string,
+    field: K,
+    value: CourseEditableFields[K],
+  ) => {
+    setEdits((current) => ({
+      ...current,
+      [courseId]: { ...current[courseId], [field]: value },
+    }));
+  };
+
+  const saveCourse = (course: CourseState) => {
+    setFeedback(null);
+    const partial = edits[course.id];
+    if (!partial || Object.keys(partial).length === 0) return;
+    if (partial.seats !== undefined && (!Number.isInteger(partial.seats) || partial.seats <= 0)) {
+      setFeedback({ kind: "error", message: "Seats must be a positive whole number." });
+      return;
+    }
+    if (partial.schedule !== undefined && !isValidSchedule(partial.schedule)) {
+      setFeedback({
+        kind: "error",
+        message: "Pick at least one day and ensure the end time comes after the start time.",
+      });
+      return;
+    }
+    const sanitized: Partial<CourseEditableFields> = partial.schedule
+      ? { ...partial, schedule: { ...partial.schedule, days: orderedDays(partial.schedule.days) } }
+      : partial;
+    try {
+      localCourseRepository.update(course.id, sanitized);
+      setEdits((current) => {
+        const next = { ...current };
+        delete next[course.id];
+        return next;
+      });
+      setFeedback({ kind: "success", message: `${course.id} updated.` });
+    } catch (error) {
+      setFeedback({ kind: "error", message: error instanceof Error ? error.message : "Save failed." });
+    }
+  };
+
+  const cancelEdit = (courseId: string) => {
+    setEdits((current) => {
+      const next = { ...current };
+      delete next[courseId];
+      return next;
+    });
+  };
+
+  const addCourse = () => {
+    setFeedback(null);
+    const id = newCourse.id.trim().toUpperCase();
+    const name = newCourse.name.trim();
+    const instructor = newCourse.instructor.trim();
+    const seats = Number(newCourse.seats);
+    const credits = Number(newCourse.credits);
+
+    if (!id || !name || !instructor) {
+      setFeedback({ kind: "error", message: "Provide an ID, name, and instructor." });
+      return;
+    }
+    if (!Number.isInteger(seats) || seats <= 0) {
+      setFeedback({ kind: "error", message: "Seats must be a positive whole number." });
+      return;
+    }
+    if (!Number.isInteger(credits) || credits <= 0) {
+      setFeedback({ kind: "error", message: "Credits must be a positive whole number." });
+      return;
+    }
+
+    const startMinutes = parseTimeInputToMinutes(newCourse.startTime);
+    const endMinutes = parseTimeInputToMinutes(newCourse.endTime);
+    if (startMinutes === null || endMinutes === null) {
+      setFeedback({ kind: "error", message: "Enter valid start and end times." });
+      return;
+    }
+    const schedule: CourseSchedule = {
+      days: orderedDays(newCourse.days),
+      startMinutes,
+      endMinutes,
+    };
+    if (!isValidSchedule(schedule)) {
+      setFeedback({
+        kind: "error",
+        message: "Pick at least one day and ensure the end time comes after the start time.",
+      });
+      return;
+    }
+
+    try {
+      localCourseRepository.add({ id, name, instructor, schedule, seats, credits, rating: 0 });
+      setNewCourse(emptyNewCourse);
+      setFeedback({ kind: "success", message: `Course ${id} added.` });
+    } catch (error) {
+      setFeedback({ kind: "error", message: error instanceof Error ? error.message : "Add failed." });
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <RegistrarHeader
+        title="Class Setup"
+        description="Build the course catalog, assign instructors, and define class size. Editable only during the setup phase."
+      />
+
+      {!isEditable && (
+        <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
+          <Lock className="mt-0.5 h-5 w-5 text-amber-700" />
+          <div className="text-sm text-amber-900">
+            <p className="font-medium">Course configuration is locked.</p>
+            <p className="mt-1 text-amber-800">
+              The system is currently in the <span className="font-medium">{SEMESTER_PHASES.find((entry) => entry.id === phase)?.label}</span> phase.
+              Class catalog edits and new classes are disabled until the registrar returns the cycle to Class Setup.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {feedback && (
+        <div
+          className={`rounded-2xl px-4 py-3 text-sm ${
+            feedback.kind === "success"
+              ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
+          {feedback.message}
+        </div>
+      )}
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Plus className="h-5 w-5 text-blue-700" />
+            <h2 className="text-xl text-slate-950">Add a new class</h2>
+          </div>
+        </CardHeader>
+        <CardBody>
+          <fieldset disabled={!isEditable} className="space-y-4 disabled:opacity-60">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Course ID</span>
+                <input
+                  value={newCourse.id}
+                  onChange={(event) => setNewCourse((current) => ({ ...current, id: event.target.value }))}
+                  placeholder="e.g. CS500"
+                  className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Course name</span>
+                <input
+                  value={newCourse.name}
+                  onChange={(event) => setNewCourse((current) => ({ ...current, name: event.target.value }))}
+                  className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Instructor</span>
+                <input
+                  value={newCourse.instructor}
+                  onChange={(event) => setNewCourse((current) => ({ ...current, instructor: event.target.value }))}
+                  placeholder="e.g. Dr. Sarah Johnson"
+                  className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Seats</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={newCourse.seats}
+                  onChange={(event) => setNewCourse((current) => ({ ...current, seats: event.target.value }))}
+                  className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Credits</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={newCourse.credits}
+                  onChange={(event) => setNewCourse((current) => ({ ...current, credits: event.target.value }))}
+                  className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed"
+                />
+              </label>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+              <p className="text-sm font-medium text-slate-700">Schedule</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {WEEKDAYS.map((day) => {
+                  const isOn = newCourse.days.includes(day);
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => setNewCourse((current) => ({ ...current, days: toggleDay(current.days, day) }))}
+                      className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed ${
+                        isOn
+                          ? "bg-slate-950 text-white"
+                          : "border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">Start time</span>
+                  <input
+                    type="time"
+                    value={newCourse.startTime}
+                    onChange={(event) => setNewCourse((current) => ({ ...current, startTime: event.target.value }))}
+                    className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">End time</span>
+                  <input
+                    type="time"
+                    value={newCourse.endTime}
+                    onChange={(event) => setNewCourse((current) => ({ ...current, endTime: event.target.value }))}
+                    className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed"
+                  />
+                </label>
+                <div className="rounded-2xl bg-slate-100 px-3 py-2 text-xs text-slate-700">
+                  Preview: <span className="font-medium text-slate-950">
+                    {newCourse.days.length === 0
+                      ? "Pick at least one day"
+                      : `${orderedDays(newCourse.days).join("/")} ${newCourse.startTime} - ${newCourse.endTime}`}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button variant="primary" className="gap-2" onClick={addCourse} disabled={!isEditable}>
+                <Plus className="h-4 w-4" />
+                Add class
+              </Button>
+            </div>
+          </fieldset>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-blue-700" />
+              <h2 className="text-xl text-slate-950">Existing classes</h2>
+            </div>
+            <Badge variant="neutral">{courseStates.length} courses</Badge>
+          </div>
+        </CardHeader>
+        <CardBody className="space-y-4">
+          {courseStates.length === 0 ? (
+            <p className="text-sm text-slate-600">No classes have been configured yet.</p>
+          ) : (
+            courseStates.map((course) => {
+              const hasDraft = Boolean(edits[course.id] && Object.keys(edits[course.id]).length > 0);
+
+              return (
+                <div key={course.id} className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-5">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg text-slate-950">{course.id}</h3>
+                      {course.cancelled && <Badge variant="danger">Cancelled</Badge>}
+                      {hasDraft && <Badge variant="warning">Unsaved changes</Badge>}
+                    </div>
+                    <div className="text-sm text-slate-600">
+                      {course.enrolledStudentIds.length} enrolled - {course.waitlistStudentIds.length} on waitlist
+                    </div>
+                  </div>
+
+                  <fieldset disabled={!isEditable} className="space-y-3 disabled:opacity-60">
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-700">Course name</span>
+                        <input
+                          value={getDraftValue(course, "name") ?? ""}
+                          onChange={(event) => setDraftValue(course.id, "name", event.target.value)}
+                          className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-700">Instructor</span>
+                        <input
+                          value={getDraftValue(course, "instructor") ?? ""}
+                          onChange={(event) => setDraftValue(course.id, "instructor", event.target.value)}
+                          className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-700">Seats</span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={getDraftValue(course, "seats") ?? course.seats}
+                          onChange={(event) => setDraftValue(course.id, "seats", Number(event.target.value))}
+                          className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed"
+                        />
+                      </label>
+                    </div>
+
+                    {(() => {
+                      const effectiveSchedule = (getDraftValue(course, "schedule") ?? course.schedule) as CourseSchedule;
+                      return (
+                        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                          <p className="text-sm font-medium text-slate-700">Schedule</p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {WEEKDAYS.map((day) => {
+                              const isOn = effectiveSchedule.days.includes(day);
+                              return (
+                                <button
+                                  key={day}
+                                  type="button"
+                                  onClick={() =>
+                                    setDraftValue(course.id, "schedule", {
+                                      ...effectiveSchedule,
+                                      days: toggleDay(effectiveSchedule.days, day),
+                                    })
+                                  }
+                                  className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed ${
+                                    isOn
+                                      ? "bg-slate-950 text-white"
+                                      : "border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                                  }`}
+                                >
+                                  {day}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                            <label className="block">
+                              <span className="text-sm font-medium text-slate-700">Start time</span>
+                              <input
+                                type="time"
+                                value={minutesToTimeInput(effectiveSchedule.startMinutes)}
+                                onChange={(event) => {
+                                  const next = parseTimeInputToMinutes(event.target.value);
+                                  if (next !== null) {
+                                    setDraftValue(course.id, "schedule", { ...effectiveSchedule, startMinutes: next });
+                                  }
+                                }}
+                                className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="text-sm font-medium text-slate-700">End time</span>
+                              <input
+                                type="time"
+                                value={minutesToTimeInput(effectiveSchedule.endMinutes)}
+                                onChange={(event) => {
+                                  const next = parseTimeInputToMinutes(event.target.value);
+                                  if (next !== null) {
+                                    setDraftValue(course.id, "schedule", { ...effectiveSchedule, endMinutes: next });
+                                  }
+                                }}
+                                className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed"
+                              />
+                            </label>
+                            <div className="rounded-2xl bg-slate-100 px-3 py-2 text-xs text-slate-700">
+                              Preview: <span className="font-medium text-slate-950">
+                                {effectiveSchedule.days.length === 0
+                                  ? "Pick at least one day"
+                                  : formatSchedule({ ...effectiveSchedule, days: orderedDays(effectiveSchedule.days) })}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {hasDraft && (
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => cancelEdit(course.id)} disabled={!isEditable}>
+                          Cancel
+                        </Button>
+                        <Button variant="primary" size="sm" className="gap-2" onClick={() => saveCourse(course)} disabled={!isEditable}>
+                          <Save className="h-4 w-4" />
+                          Save changes
+                        </Button>
+                      </div>
+                    )}
+                  </fieldset>
+                </div>
+              );
+            })
+          )}
+        </CardBody>
+      </Card>
+    </div>
+  );
+}
+
 export function RegistrarSemesterControlPage() {
   const [phase, setPhase] = useSemesterPhase();
   const semesterPhases = useMemo(() => buildPhaseTimeline(phase), [phase]);
   const activeIndex = SEMESTER_PHASES.findIndex((entry) => entry.id === phase);
   const nextPhase = SEMESTER_PHASES[(activeIndex + 1) % SEMESTER_PHASES.length];
+  const lastTransition = useLastTransitionSummary();
 
   return (
     <div className="space-y-6">
@@ -650,6 +1122,118 @@ export function RegistrarSemesterControlPage() {
               </div>
             </div>
           ))}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-amber-700" />
+              <h2 className="text-xl text-slate-950">Last Transition</h2>
+            </div>
+            {lastTransition && (
+              <Badge variant="neutral">{new Date(lastTransition.occurredAt).toLocaleString()}</Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardBody className="space-y-3">
+          {!lastTransition ? (
+            <p className="text-sm text-slate-600">
+              No phase-close rules have fired yet. Advance from Registration to Classes Running to trigger
+              cancellation and warning checks.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-slate-700">
+                <span className="font-medium">{SEMESTER_PHASES.find((entry) => entry.id === lastTransition.from)?.label ?? lastTransition.from}</span>
+                {" → "}
+                <span className="font-medium">{SEMESTER_PHASES.find((entry) => entry.id === lastTransition.to)?.label ?? lastTransition.to}</span>
+              </p>
+
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {lastTransition.cancelledCourses.length > 0 && (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Courses cancelled</p>
+                    <p className="mt-2 text-2xl text-slate-950">{lastTransition.cancelledCourses.length}</p>
+                  </div>
+                )}
+                {lastTransition.studentsFlaggedForReReg.length > 0 && (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-emerald-700">Students in special re-reg</p>
+                    <p className="mt-2 text-2xl text-emerald-900">{lastTransition.studentsFlaggedForReReg.length}</p>
+                  </div>
+                )}
+                {lastTransition.studentsWarnedUnderload.length > 0 && (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-amber-700">Under-load warnings issued</p>
+                    <p className="mt-2 text-2xl text-amber-900">{lastTransition.studentsWarnedUnderload.length}</p>
+                  </div>
+                )}
+                {lastTransition.instructorsWarned.length > 0 && (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-amber-700">Instructors warned</p>
+                    <p className="mt-2 text-2xl text-amber-900">{lastTransition.instructorsWarned.length}</p>
+                  </div>
+                )}
+                {lastTransition.instructorsSuspended.length > 0 && (
+                  <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-red-700">Instructors suspended</p>
+                    <p className="mt-2 text-2xl text-red-900">{lastTransition.instructorsSuspended.length}</p>
+                  </div>
+                )}
+                {(lastTransition.instructorsMissingGrades?.length ?? 0) > 0 && (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-amber-700">Instructors missing grades</p>
+                    <p className="mt-2 text-2xl text-amber-900">{lastTransition.instructorsMissingGrades?.length ?? 0}</p>
+                  </div>
+                )}
+                {(lastTransition.instructorsWarnedClassGpa?.length ?? 0) > 0 && (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-amber-700">Class GPA outliers</p>
+                    <p className="mt-2 text-2xl text-amber-900">{lastTransition.instructorsWarnedClassGpa?.length ?? 0}</p>
+                  </div>
+                )}
+                {(lastTransition.studentsTerminated?.length ?? 0) > 0 && (
+                  <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-red-700">Students terminated</p>
+                    <p className="mt-2 text-2xl text-red-900">{lastTransition.studentsTerminated?.length ?? 0}</p>
+                  </div>
+                )}
+                {(lastTransition.studentsWarnedGpaInterview?.length ?? 0) > 0 && (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-amber-700">GPA interview warnings</p>
+                    <p className="mt-2 text-2xl text-amber-900">{lastTransition.studentsWarnedGpaInterview?.length ?? 0}</p>
+                  </div>
+                )}
+                {(lastTransition.studentsHonorRoll?.length ?? 0) > 0 && (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-emerald-700">Honor roll students</p>
+                    <p className="mt-2 text-2xl text-emerald-900">{lastTransition.studentsHonorRoll?.length ?? 0}</p>
+                  </div>
+                )}
+                {(lastTransition.warningsClearedByHonor ?? 0) > 0 && (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-emerald-700">Warnings cleared by honor</p>
+                    <p className="mt-2 text-2xl text-emerald-900">{lastTransition.warningsClearedByHonor ?? 0}</p>
+                  </div>
+                )}
+              </div>
+
+              {lastTransition.cancelledCourses.length > 0 && (
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                  <p className="font-medium text-slate-900">Cancelled courses</p>
+                  <ul className="mt-2 space-y-1">
+                    {lastTransition.cancelledCourses.map((course) => (
+                      <li key={course.id} className="text-slate-700">
+                        <span className="font-medium text-slate-950">{course.id}</span> · {course.name} · {course.instructor}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          )}
         </CardBody>
       </Card>
 

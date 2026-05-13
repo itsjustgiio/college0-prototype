@@ -4,17 +4,11 @@ import { ArrowLeft, Sparkles, Star, TrendingUp, Calendar, CheckCircle, Plus } fr
 import { Card, CardHeader, CardBody } from "../components/Card";
 import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
+import { useCourses } from "../hooks/useCourses";
+import { formatSchedule } from "../domain/schedule";
 
 interface Recommendation {
-  course: {
-    id: string;
-    name: string;
-    instructor: string;
-    time: string;
-    rating: number;
-    seats: number;
-    enrolled: number;
-  };
+  courseId: string;
   score: number;
   reasons: {
     factor: string;
@@ -24,19 +18,12 @@ interface Recommendation {
 }
 
 export function SmartCRE() {
+  const courses = useCourses();
   const [addedCourses, setAddedCourses] = useState<string[]>([]);
 
   const recommendations: Recommendation[] = [
     {
-      course: {
-        id: "CS401",
-        name: "Machine Learning",
-        instructor: "Dr. Emily White",
-        time: "Mon/Wed 10:00-11:30 AM",
-        rating: 4.9,
-        seats: 15,
-        enrolled: 14,
-      },
+      courseId: "CS401",
       score: 95,
       reasons: [
         { factor: "Graduation Requirement", description: "Required for CS degree completion", impact: "high" },
@@ -46,33 +33,17 @@ export function SmartCRE() {
       ],
     },
     {
-      course: {
-        id: "CS302",
-        name: "Web Development",
-        instructor: "Prof. David Lee",
-        time: "Tue/Thu 1:00-2:30 PM",
-        rating: 4.6,
-        seats: 30,
-        enrolled: 22,
-      },
+      courseId: "CS302",
       score: 88,
       reasons: [
         { factor: "Career Alignment", description: "Matches your interests in full-stack development", impact: "high" },
-        { factor: "Good Availability", description: "8 seats remaining", impact: "medium" },
+        { factor: "Good Availability", description: "Plenty of seats remaining", impact: "medium" },
         { factor: "Schedule Compatible", description: "Fits well with current schedule", impact: "medium" },
         { factor: "Strong Rating", description: "4.6/5.0 student rating", impact: "low" },
       ],
     },
     {
-      course: {
-        id: "CS402",
-        name: "Software Engineering",
-        instructor: "Dr. Michael Chen",
-        time: "Tue/Thu 2:00-3:30 PM",
-        rating: 4.3,
-        seats: 25,
-        enrolled: 20,
-      },
+      courseId: "CS402",
       score: 82,
       reasons: [
         { factor: "Prerequisite Complete", description: "You completed CS201 with grade A", impact: "high" },
@@ -81,20 +52,12 @@ export function SmartCRE() {
       ],
     },
     {
-      course: {
-        id: "MATH301",
-        name: "Linear Algebra",
-        instructor: "Dr. Lisa Brown",
-        time: "Tue/Thu 9:00-10:30 AM",
-        rating: 4.1,
-        seats: 20,
-        enrolled: 19,
-      },
+      courseId: "MATH301",
       score: 75,
       reasons: [
         { factor: "Math Requirement", description: "Fulfills mathematics elective", impact: "high" },
         { factor: "ML Prerequisite", description: "Useful for advanced ML courses", impact: "medium" },
-        { factor: "Limited Seats", description: "Only 1 seat remaining", impact: "low" },
+        { factor: "Limited Seats", description: "Capacity is tight", impact: "low" },
       ],
     },
   ];
@@ -147,10 +110,12 @@ export function SmartCRE() {
 
       <div className="space-y-4">
         {recommendations.map((rec, index) => {
-          const isAdded = addedCourses.includes(rec.course.id);
+          const course = courses.find((entry) => entry.id === rec.courseId);
+          if (!course) return null;
+          const isAdded = addedCourses.includes(course.id);
 
           return (
-            <Card key={rec.course.id}>
+            <Card key={course.id}>
               <CardBody>
                 <div className="grid gap-6 lg:grid-cols-[120px_1fr]">
                   <div className="rounded-3xl bg-slate-950 px-4 py-5 text-center text-white">
@@ -165,23 +130,23 @@ export function SmartCRE() {
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div>
                         <div className="flex flex-wrap items-center gap-3">
-                          <h2 className="text-xl text-slate-950">{rec.course.id}</h2>
+                          <h2 className="text-xl text-slate-950">{course.id}</h2>
                           <div className="inline-flex items-center gap-1 text-sm text-amber-700">
                             <Star className="h-4 w-4 fill-amber-500 text-amber-500" />
-                            {rec.course.rating}
+                            {course.rating}
                           </div>
                         </div>
-                        <p className="mt-2 text-sm text-slate-700">{rec.course.name}</p>
+                        <p className="mt-2 text-sm text-slate-700">{course.name}</p>
                         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-600">
-                          <span>{rec.course.instructor}</span>
-                          <span>{rec.course.time}</span>
-                          <span>{rec.course.enrolled}/{rec.course.seats} enrolled</span>
+                          <span>{course.instructor}</span>
+                          <span>{formatSchedule(course.schedule)}</span>
+                          <span>{course.enrolledStudentIds.length}/{course.seats} enrolled</span>
                         </div>
                       </div>
 
                       <Button
                         variant={isAdded ? "secondary" : "primary"}
-                        onClick={() => handleAddToRegistration(rec.course.id)}
+                        onClick={() => handleAddToRegistration(course.id)}
                         disabled={isAdded}
                         className="gap-2"
                       >
