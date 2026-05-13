@@ -16,6 +16,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Trash2,
 } from "lucide-react";
 import { Card, CardHeader, CardBody } from "../components/Card";
 import { Button } from "../components/Button";
@@ -54,6 +55,15 @@ const COURSE_COLORS = [
 ];
 
 const PLANNED_SCHEDULE_KEY = "college0.registration.plannedSchedule";
+const PERSONAL_TIME_KEY = "college0.registration.personalTimes";
+
+interface PersonalTimeBlock {
+  id: string;
+  title: string;
+  day: DayOfWeek;
+  startMinutes: number;
+  endMinutes: number;
+}
 
 function hasBrowserStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -75,6 +85,22 @@ function writePlannedCourseIds(email: string, courseIds: string[]) {
   window.localStorage.setItem(`${PLANNED_SCHEDULE_KEY}:${email.toLowerCase()}`, JSON.stringify(courseIds));
 }
 
+function readPersonalTimes(email: string): PersonalTimeBlock[] {
+  if (!hasBrowserStorage() || !email) return [];
+  const raw = window.localStorage.getItem(`${PERSONAL_TIME_KEY}:${email.toLowerCase()}`);
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as PersonalTimeBlock[];
+  } catch {
+    return [];
+  }
+}
+
+function writePersonalTimes(email: string, blocks: PersonalTimeBlock[]) {
+  if (!hasBrowserStorage() || !email) return;
+  window.localStorage.setItem(`${PERSONAL_TIME_KEY}:${email.toLowerCase()}`, JSON.stringify(blocks));
+}
+
 export function Registration() {
   const { user } = useAuth();
   const email = user?.email ?? "";
@@ -86,6 +112,7 @@ export function Registration() {
   const courses = useCourses();
   const enrollment = useStudentEnrollment(email);
   const [plannedCourseIds, setPlannedCourseIds] = useState<string[]>(() => readPlannedCourseIds(email));
+  const [personalTimes, setPersonalTimes] = useState<PersonalTimeBlock[]>(() => readPersonalTimes(email));
   const [feedback, setFeedback] = useState<{ kind: "success" | "error" | "info"; message: string } | null>(null);
   const plannedCourses = courses.filter(
     (course) =>
@@ -96,11 +123,17 @@ export function Registration() {
 
   useEffect(() => {
     setPlannedCourseIds(readPlannedCourseIds(email));
+    setPersonalTimes(readPersonalTimes(email));
   }, [email]);
 
   const savePlannedCourseIds = (nextCourseIds: string[]) => {
     setPlannedCourseIds(nextCourseIds);
     writePlannedCourseIds(email, nextCourseIds);
+  };
+
+  const savePersonalTimes = (nextBlocks: PersonalTimeBlock[]) => {
+    setPersonalTimes(nextBlocks);
+    writePersonalTimes(email, nextBlocks);
   };
 
   const hasConflictWithPlannedSchedule = (candidate: CourseState): CourseState | null => {
@@ -305,6 +338,8 @@ export function Registration() {
         registeredCourses={registeredCourses}
         waitlistedCourseIds={new Set(enrollment.waitlisted.map((course) => course.id))}
         plannedCourseIds={new Set(plannedCourses.map((course) => course.id))}
+        personalTimes={personalTimes}
+        onSavePersonalTimes={savePersonalTimes}
         totalCredits={totalCredits + plannedCredits}
         registrationOpen={isRegistrationOpen}
       />
@@ -522,9 +557,9 @@ function clampToSchedule(minutes: number) {
   return Math.min(Math.max(minutes, SCHEDULE_START_MINUTES), SCHEDULE_END_MINUTES);
 }
 
-function blockStyle(course: CourseState) {
-  const start = clampToSchedule(course.schedule.startMinutes);
-  const end = clampToSchedule(course.schedule.endMinutes);
+function blockStyle(input: { startMinutes: number; endMinutes: number }) {
+  const start = clampToSchedule(input.startMinutes);
+  const end = clampToSchedule(input.endMinutes);
   const total = SCHEDULE_END_MINUTES - SCHEDULE_START_MINUTES;
   return {
     top: `${((start - SCHEDULE_START_MINUTES) / total) * 100}%`,
@@ -536,17 +571,26 @@ function ScheduleBuilder({
   registeredCourses,
   waitlistedCourseIds,
   plannedCourseIds,
+  personalTimes,
+  onSavePersonalTimes,
   totalCredits,
   registrationOpen,
 }: {
   registeredCourses: CourseState[];
   waitlistedCourseIds: Set<string>;
   plannedCourseIds: Set<string>;
+  personalTimes: PersonalTimeBlock[];
+  onSavePersonalTimes: (blocks: PersonalTimeBlock[]) => void;
   totalCredits: number;
   registrationOpen: boolean;
 }) {
   const [selectedOpen, setSelectedOpen] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [personalTimesOpen, setPersonalTimesOpen] = useState(false);
+  const [personalTitle, setPersonalTitle] = useState("Work");
+  const [personalDay, setPersonalDay] = useState<DayOfWeek>("Mon");
+  const [personalStart, setPersonalStart] = useState("12:00");
+  const [personalEnd, setPersonalEnd] = useState("13:00");
   const marks = timeMarks();
   const scheduleHeight = ((SCHEDULE_END_MINUTES - SCHEDULE_START_MINUTES) / 60) * SCHEDULE_HOUR_HEIGHT;
   const courseColorById = new Map(registeredCourses.map((course, index) => [course.id, colorForCourse(index)]));
@@ -557,6 +601,28 @@ function ScheduleBuilder({
       color: courseColorById.get(course.id) ?? COURSE_COLORS[0],
     })),
   );
+
+  const addPersonalTime = () => {
+    const [startHour, startMinute] = personalStart.split(":").map(Number);
+    const [endHour, endMinute] = personalEnd.split(":").map(Number);
+    const startMinutes = startHour * 60 + startMinute;
+    const endMinutes = endHour * 60 + endMinute;
+    if (!personalTitle.trim() || startMinutes >= endMinutes) return;
+    onSavePersonalTimes([
+      ...personalTimes,
+      {
+        id: `personal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        title: personalTitle.trim(),
+        day: personalDay,
+        startMinutes,
+        endMinutes,
+      },
+    ]);
+  };
+
+  const removePersonalTime = (id: string) => {
+    onSavePersonalTimes(personalTimes.filter((block) => block.id !== id));
+  };
 
   return (
     <Card>
@@ -739,7 +805,7 @@ function ScheduleBuilder({
                                 <div
                                   key={`${course.id}-${day}`}
                                   className={`absolute left-1 right-1 overflow-hidden rounded-sm border-l-4 px-2 py-2 text-center text-xs shadow-sm ${color} ${isWaitlisted || isPlanned ? "opacity-75" : ""}`}
-                                  style={blockStyle(course)}
+                                  style={blockStyle(course.schedule)}
                                 >
                                   <p className="font-semibold leading-tight">{course.id}</p>
                                   {detailsOpen && (
@@ -754,6 +820,18 @@ function ScheduleBuilder({
                                 </div>
                               );
                             })}
+                          {personalTimes
+                            .filter((block) => block.day === day)
+                            .map((block) => (
+                              <div
+                                key={block.id}
+                                className="absolute left-1 right-1 overflow-hidden rounded-sm border-l-4 border-slate-600 bg-slate-200 px-2 py-2 text-center text-xs text-slate-800 shadow-sm"
+                                style={blockStyle(block)}
+                              >
+                                <p className="font-semibold leading-tight">{block.title}</p>
+                                <p className="mt-1 leading-tight">{formatMinutes(block.startMinutes)} - {formatMinutes(block.endMinutes)}</p>
+                              </div>
+                            ))}
                         </div>
                       ))}
                     </div>
@@ -776,6 +854,88 @@ function ScheduleBuilder({
                   ))
                 )}
               </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-4">
+              <button
+                type="button"
+                onClick={() => setPersonalTimesOpen((value) => !value)}
+                className="flex w-full items-center justify-between gap-3 text-left"
+              >
+                <div>
+                  <p className="font-medium text-slate-950">Add personal times</p>
+                  <p className="mt-1 text-sm text-slate-600">Block work, commuting, or other unavailable time.</p>
+                </div>
+                <Badge variant="neutral">{personalTimes.length}</Badge>
+              </button>
+
+              {personalTimesOpen && (
+                <div className="mt-4 space-y-4">
+                  <div className="grid gap-3 md:grid-cols-[1fr_120px_120px_120px_auto] md:items-end">
+                    <label className="block">
+                      <span className="text-sm font-medium text-slate-700">Label</span>
+                      <input
+                        value={personalTitle}
+                        onChange={(event) => setPersonalTitle(event.target.value)}
+                        className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-sm font-medium text-slate-700">Day</span>
+                      <select
+                        value={personalDay}
+                        onChange={(event) => setPersonalDay(event.target.value as DayOfWeek)}
+                        className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                      >
+                        {WEEKDAYS.map((day) => (
+                          <option key={day} value={day}>{day}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="text-sm font-medium text-slate-700">Start</span>
+                      <input
+                        type="time"
+                        value={personalStart}
+                        onChange={(event) => setPersonalStart(event.target.value)}
+                        className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-sm font-medium text-slate-700">End</span>
+                      <input
+                        type="time"
+                        value={personalEnd}
+                        onChange={(event) => setPersonalEnd(event.target.value)}
+                        className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                      />
+                    </label>
+                    <Button variant="secondary" onClick={addPersonalTime}>
+                      Add
+                    </Button>
+                  </div>
+
+                  {personalTimes.length > 0 && (
+                    <div className="space-y-2">
+                      {personalTimes.map((block) => (
+                        <div key={block.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                          <span className="text-slate-700">
+                            <span className="font-medium text-slate-950">{block.title}</span> - {block.day} {formatMinutes(block.startMinutes)} to {formatMinutes(block.endMinutes)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removePersonalTime(block.id)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                            aria-label={`Remove ${block.title}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 md:flex-row md:items-center md:justify-between">
