@@ -72,21 +72,31 @@ export function StudentDashboard() {
                 Start with registration, keep your records close, and use the assistant when you need policy or planning help.
               </p>
 
-              <div className="mt-5 grid gap-3 md:grid-cols-3">
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 <div className="rounded-2xl border border-blue-100 bg-white px-4 py-4">
                   <Calendar className="h-5 w-5 text-blue-700" />
-                  <p className="mt-3 text-sm font-medium text-slate-950">Register</p>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">Build a valid 2-4 course semester schedule.</p>
+                  <p className="mt-3 text-sm font-medium text-slate-950">Register for courses</p>
+                  <p className="mt-1 text-sm leading-5 text-slate-600">Select 2–4 courses each semester with no time conflicts.</p>
                 </div>
                 <div className="rounded-2xl border border-blue-100 bg-white px-4 py-4">
                   <ClipboardList className="h-5 w-5 text-emerald-700" />
-                  <p className="mt-3 text-sm font-medium text-slate-950">Review records</p>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">Track completed work, grades, and progress.</p>
+                  <p className="mt-3 text-sm font-medium text-slate-950">View academic records</p>
+                  <p className="mt-1 text-sm leading-5 text-slate-600">Track completed courses, grades, GPA, and graduation progress.</p>
+                </div>
+                <div className="rounded-2xl border border-blue-100 bg-white px-4 py-4">
+                  <Star className="h-5 w-5 text-amber-600" />
+                  <p className="mt-3 text-sm font-medium text-slate-950">Write course reviews</p>
+                  <p className="mt-1 text-sm leading-5 text-slate-600">Rate courses 1–5 stars during the semester before grades are posted.</p>
+                </div>
+                <div className="rounded-2xl border border-blue-100 bg-white px-4 py-4">
+                  <Sparkles className="h-5 w-5 text-purple-700" />
+                  <p className="mt-3 text-sm font-medium text-slate-950">Smart recommendations</p>
+                  <p className="mt-1 text-sm leading-5 text-slate-600">Let the CRE engine rank courses by fit, rating, and graduation progress.</p>
                 </div>
                 <div className="rounded-2xl border border-blue-100 bg-white px-4 py-4">
                   <MessageSquare className="h-5 w-5 text-amber-700" />
-                  <p className="mt-3 text-sm font-medium text-slate-950">Ask for help</p>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">Use the assistant for college rules and next steps.</p>
+                  <p className="mt-3 text-sm font-medium text-slate-950">AI assistant</p>
+                  <p className="mt-1 text-sm leading-5 text-slate-600">Ask about policies, registration rules, and your academic standing.</p>
                 </div>
               </div>
             </div>
@@ -95,6 +105,11 @@ export function StudentDashboard() {
               <Link to="/student/registration">
                 <Button variant="primary" className="w-full">
                   Open registration
+                </Button>
+              </Link>
+              <Link to="/student/smart-cre">
+                <Button variant="secondary" className="w-full">
+                  View recommendations
                 </Button>
               </Link>
               <Link to="/student/records">

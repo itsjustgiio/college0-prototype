@@ -168,6 +168,26 @@ export const localAuthRepository = {
     return nextSession;
   },
 
+  restoreStudentTutorial(userId: string) {
+    const credentials = readCredentials();
+    const nextCredentials = credentials.map((credential) =>
+      credential.id === userId
+        ? { ...credential, needsStudentTutorial: true }
+        : credential,
+    );
+
+    writeJson(STORAGE_KEYS.credentials, nextCredentials);
+
+    const updatedCredential = nextCredentials.find((credential) => credential.id === userId);
+    if (!updatedCredential) {
+      throw new Error("User not found.");
+    }
+
+    const nextSession = toSessionUser(updatedCredential);
+    writeJson(STORAGE_KEYS.session, nextSession);
+    return nextSession;
+  },
+
   upsertAcceptedStudentCredential(input: {
     id: string;
     name: string;

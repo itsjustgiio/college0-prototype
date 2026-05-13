@@ -8,6 +8,7 @@ interface AuthContextValue {
   signOut: () => void;
   changePassword: (nextPassword: string) => AuthUser;
   completeStudentTutorial: () => AuthUser;
+  restoreStudentTutorial: () => AuthUser;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -42,6 +43,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         const nextUser = localAuthRepository.completeStudentTutorial(user.id);
+        setUser(nextUser);
+        return nextUser;
+      },
+      restoreStudentTutorial() {
+        if (!user) {
+          throw new Error("No authenticated user.");
+        }
+
+        const nextUser = localAuthRepository.restoreStudentTutorial(user.id);
         setUser(nextUser);
         return nextUser;
       },

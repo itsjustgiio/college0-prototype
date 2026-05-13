@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router";
-import { Home, BookOpen, Calendar, Users, MessageSquare, Sparkles, BarChart3, Settings, FileText, GraduationCap, ClipboardList } from "lucide-react";
+import { Home, BookOpen, Calendar, Users, MessageSquare, Sparkles, BarChart3, Settings, FileText, GraduationCap, ClipboardList, HelpCircle } from "lucide-react";
+import { useAuth } from "../auth/AuthProvider";
 
 interface SidebarProps {
   role: "student" | "instructor" | "registrar";
@@ -7,6 +8,7 @@ interface SidebarProps {
 
 export function Sidebar({ role }: SidebarProps) {
   const location = useLocation();
+  const { user, restoreStudentTutorial } = useAuth();
   const roleTitle = role === "student" ? "Student Experience" : role === "instructor" ? "Faculty Operations" : "Registrar Control";
 
   const studentLinks = [
@@ -86,7 +88,18 @@ export function Sidebar({ role }: SidebarProps) {
         })}
       </nav>
 
-      <div className="border-t border-white/10 p-4">
+      <div className="border-t border-white/10 p-4 space-y-3">
+        {role === "student" && user && !user.needsStudentTutorial && (
+          <button
+            onClick={restoreStudentTutorial}
+            className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-slate-300 hover:bg-white/6 hover:text-white transition-all"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-slate-300">
+              <HelpCircle className="h-5 w-5" />
+            </div>
+            <span className="text-sm font-medium">Replay tutorial</span>
+          </button>
+        )}
         <div className="rounded-2xl border border-white/10 bg-slate-900 px-4 py-4">
           <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Release</p>
           <p className="mt-2 text-sm font-medium text-white">Prototype v1.0.0</p>
