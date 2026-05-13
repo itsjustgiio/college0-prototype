@@ -10,6 +10,8 @@ import {
   CheckCircle,
   Sparkles,
   Lock,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { Card, CardHeader, CardBody } from "../components/Card";
 import { Button } from "../components/Button";
@@ -33,9 +35,9 @@ type CourseAction =
 
 const MIN_COURSES = 2;
 const MAX_COURSES = 4;
-const SCHEDULE_START_MINUTES = 8 * 60;
-const SCHEDULE_END_MINUTES = 20 * 60;
-const SCHEDULE_HOUR_HEIGHT = 64;
+const SCHEDULE_START_MINUTES = 9 * 60;
+const SCHEDULE_END_MINUTES = 18 * 60;
+const SCHEDULE_HOUR_HEIGHT = 48;
 const COURSE_COLORS = [
   "border-emerald-500 bg-emerald-100 text-emerald-950",
   "border-rose-500 bg-rose-100 text-rose-950",
@@ -454,6 +456,8 @@ function ScheduleBuilder({
   waitlistedCourseIds: Set<string>;
   totalCredits: number;
 }) {
+  const [selectedOpen, setSelectedOpen] = useState(true);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const marks = timeMarks();
   const scheduleHeight = ((SCHEDULE_END_MINUTES - SCHEDULE_START_MINUTES) / 60) * SCHEDULE_HOUR_HEIGHT;
   const courseColorById = new Map(registeredCourses.map((course, index) => [course.id, colorForCourse(index)]));
@@ -486,55 +490,85 @@ function ScheduleBuilder({
         </div>
       </CardHeader>
       <CardBody>
-        <div className="grid gap-6 xl:grid-cols-[0.72fr_1.28fr]">
-          <div className="space-y-3">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-slate-950">Selected courses</p>
-                  <p className="mt-1 text-xs text-slate-600">These blocks appear on the calendar.</p>
-                </div>
-                <Badge variant="neutral">{registeredCourses.length}</Badge>
-              </div>
-            </div>
-
-            {registeredCourses.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-8 text-center">
-                <CheckCircle className="mx-auto h-8 w-8 text-slate-300" />
-                <p className="mt-3 text-sm text-slate-500">Enroll or join a waitlist to preview your schedule.</p>
-              </div>
-            ) : (
-              registeredCourses.map((course, index) => {
-                const isWaitlisted = waitlistedCourseIds.has(course.id);
-                return (
-                  <div key={course.id} className="flex gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
-                    <div className={`flex h-14 w-16 shrink-0 items-center justify-center rounded-xl border-l-4 text-center text-sm font-semibold ${colorForCourse(index)}`}>
-                      {course.id.split(/(?=\d)/)[0]}
-                      <br />
-                      {course.id.replace(/^\D+/, "")}
+        <div className={`grid gap-4 ${selectedOpen ? "xl:grid-cols-[340px_minmax(0,1fr)]" : "xl:grid-cols-[56px_minmax(0,1fr)]"}`}>
+          <div className="min-w-0">
+            {selectedOpen ? (
+              <div className="space-y-3">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-slate-950">Selected courses</p>
+                      <p className="mt-1 text-xs text-slate-600">These blocks appear on the calendar.</p>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-medium text-slate-950">{course.name}</p>
-                        <Badge variant={isWaitlisted ? "warning" : "success"}>{isWaitlisted ? "Waitlisted" : "Enrolled"}</Badge>
-                      </div>
-                      <p className="mt-1 text-sm text-slate-600">{course.instructor}</p>
-                      <p className="mt-2 text-xs text-slate-500">{formatSchedule(course.schedule)}</p>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="neutral">{registeredCourses.length}</Badge>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOpen(false)}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                        aria-label="Collapse selected courses"
+                      >
+                        <PanelLeftClose className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
-                );
-              })
+                </div>
+
+                {registeredCourses.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-8 text-center">
+                    <CheckCircle className="mx-auto h-8 w-8 text-slate-300" />
+                    <p className="mt-3 text-sm text-slate-500">Enroll or join a waitlist to preview your schedule.</p>
+                  </div>
+                ) : (
+                  registeredCourses.map((course, index) => {
+                    const isWaitlisted = waitlistedCourseIds.has(course.id);
+                    return (
+                      <div key={course.id} className="flex gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                        <div className={`flex h-14 w-16 shrink-0 items-center justify-center rounded-xl border-l-4 text-center text-sm font-semibold ${colorForCourse(index)}`}>
+                          {course.id.split(/(?=\d)/)[0]}
+                          <br />
+                          {course.id.replace(/^\D+/, "")}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-medium text-slate-950">{course.name}</p>
+                            <Badge variant={isWaitlisted ? "warning" : "success"}>{isWaitlisted ? "Waitlisted" : "Enrolled"}</Badge>
+                          </div>
+                          <p className="mt-1 text-sm text-slate-600">{course.instructor}</p>
+                          <p className="mt-2 text-xs text-slate-500">{formatSchedule(course.schedule)}</p>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setSelectedOpen(true)}
+                className="flex min-h-[432px] w-full flex-col items-center justify-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-2 py-4 text-slate-600 hover:bg-slate-100"
+                aria-label="Open selected courses"
+              >
+                <PanelLeftOpen className="h-5 w-5" />
+                <span className="[writing-mode:vertical-rl] rotate-180 text-xs font-medium uppercase tracking-[0.18em]">
+                  Courses ({registeredCourses.length})
+                </span>
+              </button>
             )}
           </div>
 
           <div className="min-w-0">
             <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="flex items-center gap-3 text-sm text-slate-600">
+              <button
+                type="button"
+                onClick={() => setDetailsOpen((value) => !value)}
+                className="flex items-center gap-3 text-sm text-slate-600"
+              >
                 <span>Class details</span>
-                <span className="h-5 w-9 rounded-full bg-slate-200 p-0.5">
-                  <span className="block h-4 w-4 rounded-full bg-white shadow-sm" />
+                <span className={`h-5 w-9 rounded-full p-0.5 transition-colors ${detailsOpen ? "bg-blue-600" : "bg-slate-200"}`}>
+                  <span className={`block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${detailsOpen ? "translate-x-4" : ""}`} />
                 </span>
-              </div>
+              </button>
               <label className="flex items-center gap-2 text-sm text-slate-600">
                 Sort by
                 <select className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900">
@@ -545,7 +579,7 @@ function ScheduleBuilder({
             </div>
 
             <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-              <div className="min-w-[820px]">
+              <div className="min-w-[760px]">
                 <div className="grid grid-cols-[72px_repeat(5,minmax(0,1fr))] border-b border-slate-200 bg-slate-100">
                   <div className="px-3 py-3 text-xs uppercase tracking-[0.14em] text-slate-500">Time</div>
                   {WEEKDAYS.map((day) => (
@@ -589,8 +623,12 @@ function ScheduleBuilder({
                               style={blockStyle(course)}
                             >
                               <p className="font-semibold leading-tight">{course.id}</p>
-                              <p className="leading-tight">LEC</p>
-                              <p className="mt-1 truncate leading-tight">{course.name}</p>
+                              {detailsOpen && (
+                                <>
+                                  <p className="leading-tight">LEC</p>
+                                  <p className="mt-1 truncate leading-tight">{course.name}</p>
+                                </>
+                              )}
                               <p className="mt-1 leading-tight">{formatMinutes(course.schedule.startMinutes)} - {formatMinutes(course.schedule.endMinutes)}</p>
                               {isWaitlisted && <p className="mt-1 font-medium">Waitlist</p>}
                             </div>
