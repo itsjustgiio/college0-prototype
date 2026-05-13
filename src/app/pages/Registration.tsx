@@ -781,73 +781,75 @@ function ScheduleBuilder({
                   <ChevronsRight className="h-8 w-8" />
                 </div>
 
-                {detailsOpen ? (
-                  <div className="max-h-[560px] overflow-y-auto rounded-xl border border-slate-200 bg-white">
-                    {registeredCourses.length === 0 ? (
-                      <div className="px-5 py-10 text-center text-sm text-slate-500">
-                        Add planned, enrolled, or waitlisted classes to see full class details.
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-slate-200">
-                        {registeredCourses.map((course, index) => {
-                          const isWaitlisted = waitlistedCourseIds.has(course.id);
-                          const isPlanned = plannedCourseIds.has(course.id);
-                          const seatsTaken = course.enrolledStudentIds.length;
-                          const full = seatsTaken >= course.seats;
-                          return (
-                            <div key={`details-${course.id}`} className="bg-white">
-                              <div className={`grid gap-3 px-4 py-3 md:grid-cols-[1fr_auto] ${colorForCourse(index)}`}>
-                                <div>
-                                  <h3 className="text-lg font-semibold">{course.id}</h3>
-                                  <p>{course.name}</p>
-                                  <p>{formatSchedule(course.schedule)}</p>
+                <div className={`grid gap-4 ${detailsOpen ? "xl:grid-cols-[minmax(360px,0.95fr)_minmax(560px,1fr)]" : "grid-cols-1"}`}>
+                  {detailsOpen && (
+                    <div className="max-h-[560px] overflow-y-auto rounded-sm border border-slate-200 bg-white">
+                      {registeredCourses.length === 0 ? (
+                        <div className="px-5 py-10 text-center text-sm text-slate-500">
+                          Add planned, enrolled, or waitlisted classes to see full class details.
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-slate-200">
+                          {registeredCourses.map((course, index) => {
+                            const isWaitlisted = waitlistedCourseIds.has(course.id);
+                            const isPlanned = plannedCourseIds.has(course.id);
+                            const seatsTaken = course.enrolledStudentIds.length;
+                            const full = seatsTaken >= course.seats;
+                            return (
+                              <div key={`details-${course.id}`} className="bg-white">
+                                <div className={`grid gap-3 px-4 py-3 md:grid-cols-[1fr_auto] ${colorForCourse(index)}`}>
+                                  <div>
+                                    <h3 className="text-lg font-semibold">{course.id}</h3>
+                                    <p>{course.name}</p>
+                                    <p>{formatSchedule(course.schedule)}</p>
+                                  </div>
+                                  <div className="text-left md:text-right">
+                                    <p>2026 Spring Term: Jan 26 - May 26</p>
+                                    <p>Regular Academic Session</p>
+                                  </div>
                                 </div>
-                                <div className="text-left md:text-right">
-                                  <p>2026 Spring Term: Jan 26 - May 26</p>
-                                  <p>Regular Academic Session</p>
+                                <div className="grid gap-4 px-4 py-4 md:grid-cols-[1fr_auto]">
+                                  <div className="space-y-2">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="text-lg font-semibold">LEC {sectionLetter(index)}</span>
+                                      <Badge variant={isPlanned ? "info" : isWaitlisted ? "warning" : "success"}>
+                                        {isPlanned ? "Planned" : isWaitlisted ? "Waitlisted" : "Enrolled"}
+                                      </Badge>
+                                      <span className="text-slate-700">{34400 + index * 37}</span>
+                                    </div>
+                                    <div className="text-slate-800">
+                                      <p>
+                                        Seats: <span className={full ? "text-red-600" : ""}>{full ? "Full" : `${seatsTaken}/${course.seats}`}</span>
+                                      </p>
+                                      <p>Wait List: {course.waitlistStudentIds.length ? course.waitlistStudentIds.length : "None"}</p>
+                                    </div>
+                                    <div className="text-sm text-slate-700">
+                                      <p>PRE: Department permission or equivalent preparation.</p>
+                                      <p>Course Attributes: Graduate program course, schedule-builder eligible.</p>
+                                      <p>
+                                        <span className="font-semibold">Book Title:</span> College0 Course Reader{" "}
+                                        <span className="font-semibold">Author:</span> College0 Faculty{" "}
+                                        <span className="font-semibold">Price:</span> 55.46 USD
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="text-left text-slate-900 md:min-w-60 md:text-right">
+                                    <p>City College</p>
+                                    <p>In Person</p>
+                                    <p>{roomForCourse(course)}</p>
+                                    <p>{course.instructor}</p>
+                                    <p>{course.credits.toFixed(1)}/{course.credits.toFixed(1)} Progress Units</p>
+                                  </div>
                                 </div>
                               </div>
-                              <div className="grid gap-4 px-4 py-4 md:grid-cols-[1fr_auto]">
-                                <div className="space-y-2">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span className="text-lg font-semibold">LEC {sectionLetter(index)}</span>
-                                    <Badge variant={isPlanned ? "info" : isWaitlisted ? "warning" : "success"}>
-                                      {isPlanned ? "Planned" : isWaitlisted ? "Waitlisted" : "Enrolled"}
-                                    </Badge>
-                                    <span className="text-slate-700">{34400 + index * 37}</span>
-                                  </div>
-                                  <div className="text-slate-800">
-                                    <p>
-                                      Seats: <span className={full ? "text-red-600" : ""}>{full ? "Full" : `${seatsTaken}/${course.seats}`}</span>
-                                    </p>
-                                    <p>Wait List: {course.waitlistStudentIds.length ? course.waitlistStudentIds.length : "None"}</p>
-                                  </div>
-                                  <div className="text-sm text-slate-700">
-                                    <p>PRE: Department permission or equivalent preparation.</p>
-                                    <p>Course Attributes: Graduate program course, schedule-builder eligible.</p>
-                                    <p>
-                                      <span className="font-semibold">Book Title:</span> College0 Course Reader{" "}
-                                      <span className="font-semibold">Author:</span> College0 Faculty{" "}
-                                      <span className="font-semibold">Price:</span> 55.46 USD
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="text-left text-slate-900 md:min-w-60 md:text-right">
-                                  <p>City College</p>
-                                  <p>In Person</p>
-                                  <p>{roomForCourse(course)}</p>
-                                  <p>{course.instructor}</p>
-                                  <p>{course.credits.toFixed(1)}/{course.credits.toFixed(1)} Progress Units</p>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="overflow-x-auto rounded-sm border border-slate-200 bg-white">
                     <div className="min-w-[760px]">
                       <div className="grid grid-cols-[72px_repeat(5,minmax(0,1fr))] border-b border-slate-200 bg-slate-200">
                         <div className="px-3 py-3 text-xs uppercase tracking-[0.14em] text-slate-500">Time</div>
@@ -918,7 +920,7 @@ function ScheduleBuilder({
                       </div>
                     </div>
                   </div>
-                )}
+                </div>
 
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
               <div className="mb-3 flex items-center justify-between text-sm">
