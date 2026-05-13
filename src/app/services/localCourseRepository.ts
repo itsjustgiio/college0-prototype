@@ -123,6 +123,10 @@ export const localCourseRepository = {
     return mutate(courseId, (course) => ({ ...course, ...partial }));
   },
 
+  setRating(courseId: string, rating: number) {
+    return mutate(courseId, (course) => ({ ...course, rating }));
+  },
+
   add(course: Omit<CourseState, "enrolledStudentIds" | "waitlistStudentIds" | "cancelled" | "cancelReason">) {
     const all = readAll();
     if (all.some((entry) => entry.id === course.id)) {

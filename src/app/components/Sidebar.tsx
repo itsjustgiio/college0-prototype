@@ -28,6 +28,7 @@ export function Sidebar({ role }: SidebarProps) {
     { to: "/registrar", icon: Home, label: "Dashboard" },
     { to: "/registrar/applications", icon: FileText, label: "Applications" },
     { to: "/registrar/graduation", icon: GraduationCap, label: "Graduation" },
+    { to: "/registrar/reviews", icon: ClipboardList, label: "Reviews" },
     { to: "/registrar/class-setup", icon: BookOpen, label: "Class Setup" },
     { to: "/registrar/complaints", icon: MessageSquare, label: "Complaints" },
     { to: "/registrar/semester-control", icon: Settings, label: "Semester Control" },

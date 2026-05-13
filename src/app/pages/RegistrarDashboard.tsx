@@ -13,7 +13,9 @@ import { localCourseRepository, type CourseEditableFields, type CourseState } fr
 import { useCourses } from "../hooks/useCourses";
 import { useLastTransitionSummary } from "../hooks/usePhaseState";
 import { useAllGraduationApplications, usePendingGraduationApplications } from "../hooks/useGraduation";
+import { useRegistrarReviews, useTabooWords } from "../hooks/useReviews";
 import { GRADUATION_THRESHOLD, localGraduationRepository } from "../services/localGraduationRepository";
+import { localReviewsRepository } from "../services/localReviewsRepository";
 import { useAuth } from "../auth/AuthProvider";
 import { resolveStudentDisplayName } from "../domain/student";
 import {
@@ -760,6 +762,118 @@ export function RegistrarGraduationPage() {
                 </div>
               </div>
             ))
+          )}
+        </CardBody>
+      </Card>
+    </div>
+  );
+}
+
+export function RegistrarReviewsPage() {
+  const tabooWords = useTabooWords();
+  const reviews = useRegistrarReviews();
+  const [tabooInput, setTabooInput] = useState(() => tabooWords.join(", "));
+  const [saveMessage, setSaveMessage] = useState("");
+
+  useEffect(() => {
+    setTabooInput(tabooWords.join(", "));
+  }, [tabooWords]);
+
+  const saveTabooWords = () => {
+    const nextWords = tabooInput
+      .split(/[\n,]/)
+      .map((word) => word.trim())
+      .filter(Boolean);
+    const saved = localReviewsRepository.setTabooWords(nextWords);
+    setSaveMessage(`Saved ${saved.length} taboo word${saved.length === 1 ? "" : "s"}.`);
+  };
+
+  return (
+    <div className="space-y-6">
+      <RegistrarHeader
+        title="Review Moderation"
+        description="Manage taboo words and inspect the full registrar-only review audit trail."
+      />
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="h-5 w-5 text-red-700" />
+            <h2 className="text-xl text-slate-950">Taboo Word List</h2>
+          </div>
+        </CardHeader>
+        <CardBody className="space-y-4">
+          <textarea
+            value={tabooInput}
+            onChange={(event) => setTabooInput(event.target.value)}
+            placeholder="Separate words with commas or new lines."
+            className="min-h-32 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
+          />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-slate-600">
+              1-2 matches stay visible with masking and 1 warning. 3 or more matches are hidden and issue 2 warnings.
+            </p>
+            <Button variant="primary" onClick={saveTabooWords}>
+              Save taboo words
+            </Button>
+          </div>
+          {saveMessage && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+              {saveMessage}
+            </div>
+          )}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <ClipboardList className="h-5 w-5 text-blue-700" />
+            <h2 className="text-xl text-slate-950">Registrar Review Audit</h2>
+          </div>
+        </CardHeader>
+        <CardBody className="space-y-4">
+          {reviews.length === 0 ? (
+            <p className="text-sm text-slate-600">No student reviews have been submitted yet.</p>
+          ) : (
+            reviews.map((review) => {
+              const course = localCourseRepository.get(review.courseId);
+              return (
+                <div key={review.id} className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-5">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-base font-medium text-slate-950">
+                          {course ? `${course.id} - ${course.name}` : review.courseId}
+                        </h3>
+                        <Badge variant={review.visibility === "visible" ? "success" : "danger"}>
+                          {review.visibility}
+                        </Badge>
+                        <Badge variant={review.tabooCount >= 3 ? "danger" : review.tabooCount > 0 ? "warning" : "neutral"}>
+                          {review.tabooCount} taboo match{review.tabooCount === 1 ? "" : "es"}
+                        </Badge>
+                      </div>
+                      <p className="mt-2 text-sm text-slate-700">
+                        Reviewer: {resolveStudentDisplayName(review.studentEmail)} ({review.studentEmail})
+                      </p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        Rating {review.rating}/5 - Submitted {new Date(review.submittedAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="grid w-full max-w-2xl gap-3 md:grid-cols-2">
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Raw comment</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-800">{review.rawComment}</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Displayed comment</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-800">{review.displayComment}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
           )}
         </CardBody>
       </Card>

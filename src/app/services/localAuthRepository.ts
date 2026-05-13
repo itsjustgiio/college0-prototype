@@ -18,6 +18,7 @@ const seededCredentials: AuthCredentialRecord[] = [
     studentId: `S2026-${String(student.id).padStart(3, "0")}`,
     password: "student123",
     mustChangePassword: false,
+    needsStudentTutorial: false,
   })),
   ...Array.from(new Set(courses.map((course) => course.instructor))).map((instructorName, index) => ({
     id: `instructor-${index + 1}`,
@@ -144,6 +145,29 @@ export const localAuthRepository = {
     return nextSession;
   },
 
+  completeStudentTutorial(userId: string) {
+    const credentials = readCredentials();
+    const nextCredentials = credentials.map((credential) =>
+      credential.id === userId
+        ? {
+            ...credential,
+            needsStudentTutorial: false,
+          }
+        : credential,
+    );
+
+    writeJson(STORAGE_KEYS.credentials, nextCredentials);
+
+    const updatedCredential = nextCredentials.find((credential) => credential.id === userId);
+    if (!updatedCredential) {
+      throw new Error("User not found.");
+    }
+
+    const nextSession = toSessionUser(updatedCredential);
+    writeJson(STORAGE_KEYS.session, nextSession);
+    return nextSession;
+  },
+
   upsertAcceptedStudentCredential(input: {
     id: string;
     name: string;
@@ -160,6 +184,7 @@ export const localAuthRepository = {
       studentId: input.studentId,
       password: input.temporaryPassword,
       mustChangePassword: true,
+      needsStudentTutorial: true,
     };
 
     const nextCredentials = [

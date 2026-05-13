@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BookOpen, Users, TrendingUp, AlertCircle, ClipboardCheck, Lock, UserPlus, ShieldAlert } from "lucide-react";
+import { BookOpen, Users, TrendingUp, AlertCircle, ClipboardCheck, Lock, UserPlus, ShieldAlert, Star } from "lucide-react";
 import { Card, CardHeader, CardBody } from "../components/Card";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
@@ -15,6 +15,7 @@ import { useCourseGrades } from "../hooks/useGrading";
 import { localGradingRepository } from "../services/localGradingRepository";
 import { GRADE_OPTIONS, isLetterGrade } from "../domain/grading";
 import { resolveStudentDisplayName } from "../domain/student";
+import { useCourseReviewSummary, useVisibleCourseReviews } from "../hooks/useReviews";
 
 function InstructorHeader({
   title,
@@ -116,6 +117,7 @@ export function InstructorDashboard() {
                       <h3 className="text-sm font-medium text-slate-950">{course.id}</h3>
                       <p className="mt-1 text-sm text-slate-600">{course.name}</p>
                       <div className="mt-2 text-xs text-slate-500">{formatSchedule(course.schedule)}</div>
+                      <InstructorCourseReviewPreview courseId={course.id} />
                     </div>
                     <Badge variant={course.enrolledStudentIds.length >= course.seats ? "danger" : "success"}>
                       {course.enrolledStudentIds.length}/{course.seats} enrolled
@@ -143,6 +145,29 @@ export function InstructorDashboard() {
           </Card>
         )}
       </div>
+    </div>
+  );
+}
+
+function InstructorCourseReviewPreview({ courseId }: { courseId: string }) {
+  const summary = useCourseReviewSummary(courseId);
+  const reviews = useVisibleCourseReviews(courseId);
+
+  if (summary.averageRating === null && reviews.length === 0) return null;
+
+  return (
+    <div className="mt-3 space-y-2">
+      {summary.averageRating !== null && (
+        <div className="flex items-center gap-2 text-xs text-slate-600">
+          <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
+          <span>{summary.averageRating.toFixed(2)} visible average from {summary.visibleReviewCount} review{summary.visibleReviewCount === 1 ? "" : "s"}</span>
+        </div>
+      )}
+      {reviews.slice(0, 1).map((review) => (
+        <p key={review.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">
+          {review.displayComment}
+        </p>
+      ))}
     </div>
   );
 }

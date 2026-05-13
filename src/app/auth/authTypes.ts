@@ -7,6 +7,7 @@ export interface AuthUser {
   role: UserRole;
   studentId?: string;
   mustChangePassword?: boolean;
+  needsStudentTutorial?: boolean;
 }
 
 export interface AuthCredentialRecord extends AuthUser {

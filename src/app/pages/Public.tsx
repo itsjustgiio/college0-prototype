@@ -24,6 +24,7 @@ import {
 import { useSemesterPhase } from "../hooks/useSemesterPhase";
 import { SEMESTER_PHASES } from "../services/localSemesterRepository";
 import { useCourses } from "../hooks/useCourses";
+import { useCourseReviewSummary, useVisibleCourseReviews } from "../hooks/useReviews";
 import { formatSchedule } from "../domain/schedule";
 
 export function Public() {
@@ -216,6 +217,7 @@ export function Public() {
                           <p className="text-sm font-medium text-slate-950">{course.id} - {course.name}</p>
                           <p className="mt-1 text-sm text-slate-600">{course.instructor}</p>
                           <p className="mt-1 text-xs text-slate-500">{formatSchedule(course.schedule)}</p>
+                          <PublicCourseReviewPreview courseId={course.id} />
                         </div>
                         <div className="flex items-center gap-4 text-sm md:justify-end">
                           <span className="text-slate-600">{course.enrolledStudentIds.length}/{course.seats} seats</span>
@@ -583,6 +585,28 @@ export function Public() {
         </div>
 
       </div>
+    </div>
+  );
+}
+
+function PublicCourseReviewPreview({ courseId }: { courseId: string }) {
+  const summary = useCourseReviewSummary(courseId);
+  const reviews = useVisibleCourseReviews(courseId);
+
+  if (summary.averageRating === null && reviews.length === 0) return null;
+
+  return (
+    <div className="mt-3 space-y-2">
+      {summary.averageRating !== null && (
+        <p className="text-xs font-medium text-slate-600">
+          Visible review average: {summary.averageRating.toFixed(2)} / 5 from {summary.visibleReviewCount} review{summary.visibleReviewCount === 1 ? "" : "s"}
+        </p>
+      )}
+      {reviews.slice(0, 1).map((review) => (
+        <p key={review.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">
+          {review.displayComment}
+        </p>
+      ))}
     </div>
   );
 }

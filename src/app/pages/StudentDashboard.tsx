@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router";
 import {
   Calendar,
@@ -10,6 +11,9 @@ import {
   Award,
   Clock,
   XCircle,
+  ClipboardList,
+  CircleCheckBig,
+  Star,
 } from "lucide-react";
 import { Card, CardHeader, CardBody } from "../components/Card";
 import { Badge } from "../components/Badge";
@@ -20,11 +24,14 @@ import { localCourseRepository } from "../services/localCourseRepository";
 import { useStudentEnrollment } from "../hooks/useStudentEnrollment";
 import { useStudentAcademicStatus, useStudentGradesThisSemester } from "../hooks/useGrading";
 import { useGraduationStatus } from "../hooks/useGraduation";
+import { useCourseReviewSummary, useOwnCourseReview, useVisibleCourseReviews } from "../hooks/useReviews";
 import { localGraduationRepository, GRADUATION_THRESHOLD } from "../services/localGraduationRepository";
+import { localReviewsRepository, type ReviewRating } from "../services/localReviewsRepository";
+import { localGradingRepository } from "../services/localGradingRepository";
 import { formatSchedule } from "../domain/schedule";
 
 export function StudentDashboard() {
-  const { user } = useAuth();
+  const { user, completeStudentTutorial } = useAuth();
   const student = localCollegeRepository.getStudentProfile({
     name: user?.name ?? "Student",
     email: user?.email ?? "",
@@ -45,6 +52,57 @@ export function StudentDashboard() {
 
   return (
     <div className="space-y-8">
+      {user?.role === "student" && user.needsStudentTutorial && (
+        <section className="rounded-[28px] border border-blue-200 bg-blue-50 px-5 py-5 md:px-6 md:py-6">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-3xl">
+              <div className="flex items-center gap-2 text-blue-950">
+                <CircleCheckBig className="h-5 w-5 text-blue-700" />
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-blue-700">New student tutorial</p>
+              </div>
+              <h2 className="mt-3 text-2xl text-slate-950">Welcome to your College0 workspace</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-700">
+                Start with registration, keep your records close, and use the assistant when you need policy or planning help.
+              </p>
+
+              <div className="mt-5 grid gap-3 md:grid-cols-3">
+                <div className="rounded-2xl border border-blue-100 bg-white px-4 py-4">
+                  <Calendar className="h-5 w-5 text-blue-700" />
+                  <p className="mt-3 text-sm font-medium text-slate-950">Register</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">Build a valid 2-4 course semester schedule.</p>
+                </div>
+                <div className="rounded-2xl border border-blue-100 bg-white px-4 py-4">
+                  <ClipboardList className="h-5 w-5 text-emerald-700" />
+                  <p className="mt-3 text-sm font-medium text-slate-950">Review records</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">Track completed work, grades, and progress.</p>
+                </div>
+                <div className="rounded-2xl border border-blue-100 bg-white px-4 py-4">
+                  <MessageSquare className="h-5 w-5 text-amber-700" />
+                  <p className="mt-3 text-sm font-medium text-slate-950">Ask for help</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">Use the assistant for college rules and next steps.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex w-full max-w-sm flex-col gap-3">
+              <Link to="/student/registration">
+                <Button variant="primary" className="w-full">
+                  Open registration
+                </Button>
+              </Link>
+              <Link to="/student/records">
+                <Button variant="secondary" className="w-full">
+                  View records
+                </Button>
+              </Link>
+              <Button variant="ghost" className="w-full" onClick={completeStudentTutorial}>
+                Mark tutorial complete
+              </Button>
+            </div>
+          </div>
+        </section>
+      )}
+
       {terminated && (
         <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4">
           <ShieldAlert className="mt-0.5 h-5 w-5 text-red-700" />
@@ -303,6 +361,7 @@ export function StudentDashboard() {
                         <span>&bull;</span>
                         <span>{formatSchedule(course.schedule)}</span>
                       </div>
+                      <StudentCourseReviewPanel courseId={course.id} courseName={course.name} studentEmail={student.email} />
                     </div>
                   ))}
                   {enrollment.waitlisted.map((course) => (
@@ -395,6 +454,131 @@ export function StudentDashboard() {
             </div>
           </CardBody>
         </Card>
+      )}
+    </div>
+  );
+}
+
+function StudentCourseReviewPanel({
+  courseId,
+  courseName,
+  studentEmail,
+}: {
+  courseId: string;
+  courseName: string;
+  studentEmail: string;
+}) {
+  const ownReview = useOwnCourseReview(courseId, studentEmail);
+  const visibleReviews = useVisibleCourseReviews(courseId);
+  const summary = useCourseReviewSummary(courseId);
+  const gradePosted = Boolean(localGradingRepository.getGrade({ courseId, studentEmail }));
+  const [rating, setRating] = useState<ReviewRating>(5);
+  const [comment, setComment] = useState("");
+  const [feedback, setFeedback] = useState<{ kind: "success" | "error"; message: string } | null>(null);
+
+  const submit = () => {
+    setFeedback(null);
+    try {
+      const review = localReviewsRepository.submitReview({
+        courseId,
+        studentEmail,
+        rating,
+        comment,
+      });
+      setComment("");
+      setFeedback({
+        kind: "success",
+        message:
+          review.visibility === "hidden"
+            ? "Review received and hidden because it matched 3 or more taboo words."
+            : review.tabooCount > 0
+              ? "Review posted with taboo words masked."
+              : "Review posted.",
+      });
+    } catch (error) {
+      setFeedback({
+        kind: "error",
+        message: error instanceof Error ? error.message : "Unable to submit review.",
+      });
+    }
+  };
+
+  return (
+    <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-sm font-medium text-slate-950">Course reviews</p>
+          <p className="mt-1 text-xs text-slate-600">
+            {summary.averageRating === null
+              ? "No visible reviews yet."
+              : `${summary.averageRating.toFixed(2)} average from ${summary.visibleReviewCount} visible review${summary.visibleReviewCount === 1 ? "" : "s"}.`}
+          </p>
+        </div>
+        {gradePosted && <Badge variant="warning">Review closed after grade posting</Badge>}
+      </div>
+
+      {visibleReviews.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {visibleReviews.slice(0, 2).map((review) => (
+            <div key={review.id} className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+              <div className="flex items-center gap-1 text-amber-600">
+                {Array.from({ length: review.rating }).map((_, index) => (
+                  <Star key={`${review.id}-${index}`} className="h-3.5 w-3.5 fill-current" />
+                ))}
+              </div>
+              <p className="mt-2 text-sm leading-6 text-slate-700">{review.displayComment}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!ownReview && !gradePosted && (
+        <div className="mt-4 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {([1, 2, 3, 4, 5] as ReviewRating[]).map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setRating(value)}
+                className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border transition-colors ${
+                  rating >= value
+                    ? "border-amber-300 bg-amber-50 text-amber-600"
+                    : "border-slate-200 bg-white text-slate-400 hover:border-slate-300"
+                }`}
+                aria-label={`${value} star${value === 1 ? "" : "s"}`}
+              >
+                <Star className={`h-4 w-4 ${rating >= value ? "fill-current" : ""}`} />
+              </button>
+            ))}
+          </div>
+          <textarea
+            value={comment}
+            onChange={(event) => setComment(event.target.value)}
+            placeholder={`Write your review of ${courseName}.`}
+            className="min-h-24 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
+          />
+          <div className="flex justify-end">
+            <Button variant="primary" size="sm" onClick={submit}>
+              Submit review
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {ownReview && (
+        <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          Your review has been recorded. {ownReview.visibility === "hidden" ? "It is hidden from public view." : "It is visible to others."}
+        </div>
+      )}
+
+      {feedback && (
+        <div className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${
+          feedback.kind === "success"
+            ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+            : "border-red-200 bg-red-50 text-red-900"
+        }`}>
+          {feedback.message}
+        </div>
       )}
     </div>
   );
