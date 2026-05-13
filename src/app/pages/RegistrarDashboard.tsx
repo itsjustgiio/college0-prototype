@@ -3,7 +3,7 @@ import { BookOpen, CheckCircle, ClipboardList, FileText, GraduationCap, Lock, Me
 import { Card, CardHeader, CardBody } from "../components/Card";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
-import { complaints, students } from "../data/mockData";
+import { students } from "../data/mockData";
 import type { InstructorApplication, ProgramAdmissionSettings, StudentApplication } from "../domain/admissions";
 import { isStudentDecisionOverride } from "../domain/admissions";
 import { localAdmissionsRepository } from "../services/localAdmissionsRepository";
@@ -14,8 +14,10 @@ import { useCourses } from "../hooks/useCourses";
 import { useLastTransitionSummary } from "../hooks/usePhaseState";
 import { useAllGraduationApplications, usePendingGraduationApplications } from "../hooks/useGraduation";
 import { useRegistrarReviews, useTabooWords } from "../hooks/useReviews";
+import { useComplaints } from "../hooks/useComplaints";
 import { GRADUATION_THRESHOLD, localGraduationRepository } from "../services/localGraduationRepository";
 import { localReviewsRepository } from "../services/localReviewsRepository";
+import { localComplaintsRepository, type ComplaintRecord, type ComplaintResolutionAction } from "../services/localComplaintsRepository";
 import { useAuth } from "../auth/AuthProvider";
 import { resolveStudentDisplayName } from "../domain/student";
 import {
@@ -65,6 +67,7 @@ export function RegistrarDashboard() {
   const [phase] = useSemesterPhase();
   const semesterPhases = useMemo(() => buildPhaseTimeline(phase), [phase]);
   const courseCatalog = useCourses();
+  const complaintRecords = useComplaints();
   const [pendingApplicationsCount, setPendingApplicationsCount] = useState(0);
 
   useEffect(() => {
@@ -117,7 +120,7 @@ export function RegistrarDashboard() {
         <Card>
           <CardBody>
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Open complaints</p>
-            <div className="mt-3 text-4xl text-slate-950">{complaints.filter((c) => c.status === "Open").length}</div>
+            <div className="mt-3 text-4xl text-slate-950">{complaintRecords.filter((c) => c.status !== "resolved").length}</div>
             <div className="mt-2"><Badge variant="danger">Action required</Badge></div>
           </CardBody>
         </Card>
@@ -183,7 +186,7 @@ export function RegistrarDashboard() {
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
               <div className="text-sm font-medium text-slate-950">Complaint backlog</div>
               <div className="mt-1 text-sm text-slate-700">
-                {complaints.filter((c) => c.status !== "Resolved").length} complaints remain unresolved or under review.
+                {complaintRecords.filter((c) => c.status !== "resolved").length} complaints remain unresolved or under review.
               </div>
             </div>
           </CardBody>
@@ -881,13 +884,89 @@ export function RegistrarReviewsPage() {
   );
 }
 
+function complaintStatusLabel(status: ComplaintRecord["status"]) {
+  return status === "under_review" ? "Under Review" : status === "open" ? "Open" : "Resolved";
+}
+
+function complaintStatusVariant(status: ComplaintRecord["status"]) {
+  return status === "resolved" ? "success" : status === "open" ? "danger" : "warning";
+}
+
 export function RegistrarComplaintsPage() {
+  const { user } = useAuth();
+  const complaintRecords = useComplaints();
+  const [resolutionNotes, setResolutionNotes] = useState<Record<string, string>>({});
+  const [resolutionActions, setResolutionActions] = useState<Record<string, ComplaintResolutionAction>>({});
+  const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+
+  const openCount = complaintRecords.filter((complaint) => complaint.status !== "resolved").length;
+
+  const markUnderReview = (complaintId: string) => {
+    setMessage(null);
+    try {
+      localComplaintsRepository.markUnderReview(complaintId);
+      setMessage({ kind: "success", text: "Complaint marked under review." });
+    } catch (error) {
+      setMessage({ kind: "error", text: error instanceof Error ? error.message : "Unable to update complaint." });
+    }
+  };
+
+  const resolveComplaint = (complaint: ComplaintRecord) => {
+    setMessage(null);
+    const action = resolutionActions[complaint.id] ?? "no_action";
+    const note = resolutionNotes[complaint.id] ?? "";
+    try {
+      localComplaintsRepository.resolve({
+        complaintId: complaint.id,
+        registrarEmail: user?.email ?? "registrar@college0.edu",
+        action,
+        note,
+      });
+      setResolutionNotes((current) => ({ ...current, [complaint.id]: "" }));
+      setResolutionActions((current) => ({ ...current, [complaint.id]: "no_action" }));
+      setMessage({ kind: "success", text: "Complaint resolved and registrar action recorded." });
+    } catch (error) {
+      setMessage({ kind: "error", text: error instanceof Error ? error.message : "Unable to resolve complaint." });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <RegistrarHeader
         title="Complaints"
-        description="Track complaint status, affected courses, and which items still need action."
+        description="Investigate complaints, issue warnings, or de-register students when the case requires it."
       />
+
+      {message && (
+        <div className={`rounded-2xl border px-4 py-3 text-sm ${
+          message.kind === "success"
+            ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+            : "border-red-200 bg-red-50 text-red-900"
+        }`}>
+          {message.text}
+        </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardBody>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Open or reviewing</p>
+            <div className="mt-3 text-4xl text-slate-950">{openCount}</div>
+          </CardBody>
+        </Card>
+        <Card>
+          <CardBody>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Resolved</p>
+            <div className="mt-3 text-4xl text-slate-950">{complaintRecords.length - openCount}</div>
+          </CardBody>
+        </Card>
+        <Card>
+          <CardBody>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Total cases</p>
+            <div className="mt-3 text-4xl text-slate-950">{complaintRecords.length}</div>
+          </CardBody>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader>
@@ -896,23 +975,87 @@ export function RegistrarComplaintsPage() {
             <h2 className="text-xl text-slate-950">Complaint Log</h2>
           </div>
         </CardHeader>
-        <CardBody className="p-0">
-          <div className="divide-y divide-slate-100">
-            {complaints.map((complaint) => (
-              <div key={complaint.id} className="px-6 py-4 hover:bg-slate-50">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h3 className="text-sm font-medium text-slate-950">{complaint.student}</h3>
-                    <p className="mt-1 text-xs text-slate-600">{complaint.course} - {complaint.type}</p>
-                    <p className="mt-2 text-xs text-slate-500">Filed {complaint.date}</p>
+        <CardBody className="space-y-4">
+          {complaintRecords.length === 0 ? (
+            <p className="text-sm text-slate-600">No complaints have been filed yet.</p>
+          ) : (
+            complaintRecords.map((complaint) => {
+              const action = resolutionActions[complaint.id] ?? "no_action";
+              const canDeregister = complaint.filedAgainstRole === "student";
+
+              return (
+                <div key={complaint.id} className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-5">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-base font-medium text-slate-950">{complaint.type}</h3>
+                        <Badge variant={complaintStatusVariant(complaint.status)}>
+                          {complaintStatusLabel(complaint.status)}
+                        </Badge>
+                      </div>
+                      <p className="mt-2 text-sm text-slate-700">{complaint.details}</p>
+                      <div className="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-2">
+                        <p>Course: <span className="font-medium text-slate-900">{complaint.courseId}</span></p>
+                        <p>Filed: {new Date(complaint.submittedAt).toLocaleString()}</p>
+                        <p>Reporter: {complaint.filedByRole} - {complaint.filedByEmail}</p>
+                        <p>Against: {complaint.filedAgainstRole} - {complaint.filedAgainstEmail}</p>
+                      </div>
+                      {complaint.resolutionNote && (
+                        <p className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                          Resolution: {complaint.resolutionNote}
+                        </p>
+                      )}
+                    </div>
+                    {complaint.status !== "resolved" && (
+                      <Button variant="outline" size="sm" onClick={() => markUnderReview(complaint.id)}>
+                        Mark reviewing
+                      </Button>
+                    )}
                   </div>
-                  <Badge variant={complaint.status === "Resolved" ? "success" : complaint.status === "Open" ? "danger" : "warning"}>
-                    {complaint.status}
-                  </Badge>
+
+                  {complaint.status !== "resolved" && (
+                    <div className="mt-5 grid gap-3 lg:grid-cols-[220px_1fr_auto] lg:items-end">
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-700">Registrar action</span>
+                        <select
+                          value={action}
+                          onChange={(event) =>
+                            setResolutionActions((current) => ({
+                              ...current,
+                              [complaint.id]: event.target.value as ComplaintResolutionAction,
+                            }))
+                          }
+                          className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                        >
+                          <option value="no_action">Resolve without punishment</option>
+                          <option value="warn_target">Warn accused party</option>
+                          <option value="warn_reporter">Warn reporter</option>
+                          {canDeregister && <option value="deregister_student">De-register accused student</option>}
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-700">Resolution note</span>
+                        <input
+                          value={resolutionNotes[complaint.id] ?? ""}
+                          onChange={(event) =>
+                            setResolutionNotes((current) => ({
+                              ...current,
+                              [complaint.id]: event.target.value,
+                            }))
+                          }
+                          placeholder="Record investigation outcome and reason."
+                          className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                        />
+                      </label>
+                      <Button variant="primary" onClick={() => resolveComplaint(complaint)}>
+                        Resolve
+                      </Button>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
-          </div>
+              );
+            })
+          )}
         </CardBody>
       </Card>
     </div>

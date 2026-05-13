@@ -146,7 +146,34 @@ export const applications = [
 ];
 
 export const complaints = [
-  { id: 1, student: 'John Doe', course: 'CS201', type: 'Grading Issue', status: 'Open', date: '2026-04-20' },
-  { id: 2, student: 'Mike Johnson', course: 'CS301', type: 'Instructor Conduct', status: 'Resolved', date: '2026-04-15' },
-  { id: 3, student: 'Emily Davis', course: 'MATH201', type: 'Course Content', status: 'Under Review', date: '2026-04-22' },
+  {
+    id: 1,
+    student: 'John Doe',
+    studentEmail: 'john.doe@college0.edu',
+    course: 'CS201',
+    type: 'Grading Issue',
+    status: 'Open',
+    date: '2026-04-20',
+    details: 'Student reports that the posted grading rubric was not followed.',
+  },
+  {
+    id: 2,
+    student: 'Mike Johnson',
+    studentEmail: 'mike.j@college0.edu',
+    course: 'CS301',
+    type: 'Instructor Conduct',
+    status: 'Resolved',
+    date: '2026-04-15',
+    details: 'Student asked the registrar to review instructor communication during project feedback.',
+  },
+  {
+    id: 3,
+    student: 'Emily Davis',
+    studentEmail: 'emily.d@college0.edu',
+    course: 'MATH201',
+    type: 'Course Content',
+    status: 'Under Review',
+    date: '2026-04-22',
+    details: 'Student reports that required materials were not available before an assessment.',
+  },
 ];

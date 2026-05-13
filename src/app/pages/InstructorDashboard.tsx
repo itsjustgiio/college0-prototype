@@ -16,6 +16,9 @@ import { localGradingRepository } from "../services/localGradingRepository";
 import { GRADE_OPTIONS, isLetterGrade } from "../domain/grading";
 import { resolveStudentDisplayName } from "../domain/student";
 import { useCourseReviewSummary, useVisibleCourseReviews } from "../hooks/useReviews";
+import { localComplaintsRepository } from "../services/localComplaintsRepository";
+import { useComplaints } from "../hooks/useComplaints";
+import { students as seedStudents } from "../data/mockData";
 
 function InstructorHeader({
   title,
@@ -365,6 +368,44 @@ export function InstructorCoursesPage() {
 export function InstructorStudentsPage() {
   const { user } = useAuth();
   const studentsList = localCollegeRepository.getInstructorRoster(user?.email ?? "");
+  const complaints = useComplaints().filter((complaint) => complaint.filedByEmail === (user?.email ?? "").toLowerCase());
+  const [selectedRosterKey, setSelectedRosterKey] = useState("");
+  const [complaintType, setComplaintType] = useState("Student Conduct");
+  const [details, setDetails] = useState("");
+  const [feedback, setFeedback] = useState<{ kind: "success" | "error"; message: string } | null>(null);
+
+  const rosterOptions = studentsList.map((entry) => {
+    const student = seedStudents.find((candidate) => candidate.name === entry.name);
+    return {
+      key: `${entry.course}:${student?.email ?? entry.name}`,
+      courseId: entry.course,
+      studentName: entry.name,
+      studentEmail: student?.email ?? "",
+    };
+  });
+  const selectedOption = rosterOptions.find((option) => option.key === selectedRosterKey) ?? rosterOptions[0];
+
+  const submitComplaint = () => {
+    setFeedback(null);
+    try {
+      localComplaintsRepository.submit({
+        filedByRole: "instructor",
+        filedByEmail: user?.email ?? "",
+        filedAgainstRole: "student",
+        filedAgainstEmail: selectedOption?.studentEmail ?? "",
+        courseId: selectedOption?.courseId ?? "",
+        type: complaintType,
+        details,
+      });
+      setDetails("");
+      setFeedback({ kind: "success", message: "Complaint sent to the registrar for action." });
+    } catch (error) {
+      setFeedback({
+        kind: "error",
+        message: error instanceof Error ? error.message : "Unable to submit complaint.",
+      });
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -407,6 +448,88 @@ export function InstructorStudentsPage() {
               </tbody>
             </table>
           </div>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-amber-700" />
+              <h2 className="text-xl text-slate-950">Registrar Complaints</h2>
+            </div>
+            <Badge variant="neutral">{complaints.length} filed</Badge>
+          </div>
+          <p className="mt-1 text-sm text-slate-600">Ask the registrar to warn or de-register a student from one of your classes.</p>
+        </CardHeader>
+        <CardBody className="space-y-4">
+          {rosterOptions.length === 0 ? (
+            <p className="text-sm text-slate-600">No roster students available for complaints.</p>
+          ) : (
+            <>
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">Student</span>
+                  <select
+                    value={selectedRosterKey || selectedOption?.key || ""}
+                    onChange={(event) => setSelectedRosterKey(event.target.value)}
+                    className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                  >
+                    {rosterOptions.map((option) => (
+                      <option key={option.key} value={option.key}>
+                        {option.studentName} - {option.courseId}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">Complaint type</span>
+                  <input
+                    value={complaintType}
+                    onChange={(event) => setComplaintType(event.target.value)}
+                    className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                  />
+                </label>
+              </div>
+              <textarea
+                value={details}
+                onChange={(event) => setDetails(event.target.value)}
+                placeholder="Describe whether the registrar should warn the student or de-register them."
+                className="min-h-24 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
+              />
+              <div className="flex justify-end">
+                <Button variant="primary" onClick={submitComplaint}>
+                  Submit complaint
+                </Button>
+              </div>
+            </>
+          )}
+
+          {feedback && (
+            <div className={`rounded-2xl border px-4 py-3 text-sm ${
+              feedback.kind === "success"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                : "border-red-200 bg-red-50 text-red-900"
+            }`}>
+              {feedback.message}
+            </div>
+          )}
+
+          {complaints.length > 0 && (
+            <div className="space-y-2">
+              {complaints.slice(0, 3).map((complaint) => (
+                <div key={complaint.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-medium text-slate-950">{complaint.type}</span>
+                    <Badge variant={complaint.status === "resolved" ? "success" : complaint.status === "open" ? "danger" : "warning"}>
+                      {complaint.status === "under_review" ? "Under Review" : complaint.status}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-600">{complaint.courseId} - {resolveStudentDisplayName(complaint.filedAgainstEmail)}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </CardBody>
       </Card>
     </div>

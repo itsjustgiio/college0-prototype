@@ -204,39 +204,23 @@ export const localAdmissionsRepository: AdmissionsRepository = {
   async submitStudentApplication(input) {
     const settings = readSettings();
     const recommendation = recommendStudentDecision(input, settings);
-    const autoDecision = recommendation === "accept" ? "approved" : "rejected";
 
-    const baseApplication: StudentApplication = {
+    const nextApplication: StudentApplication = {
       id: createId("stu-app"),
       applicantName: input.applicantName,
       email: input.email,
       gpa: input.gpa,
       submittedAt: nowIsoDate(),
-      status: autoDecision,
+      status: "pending",
       recommendedDecision: recommendation,
-      registrarDecision: autoDecision,
-      reviewedAt: nowIsoDate(),
     };
-
-    let nextApplication = baseApplication;
-
-    if (autoDecision === "approved") {
-      const approvedCount = readStudentApplications().filter(
-        (entry) => entry.status === "approved",
-      ).length;
-      const issuedCredentials = issueStudentApproval(baseApplication, approvedCount);
-      nextApplication = {
-        ...baseApplication,
-        generatedStudentId: issuedCredentials.studentId,
-        issuedTemporaryPassword: issuedCredentials.temporaryPassword,
-      };
-    }
 
     const nextApplications = [nextApplication, ...readStudentApplications()];
     writeJson(STORAGE_KEYS.studentApplications, nextApplications);
 
     // Future Supabase handoff:
-    // replace this local write with an insert into `student_applications` plus the auto-decision side effects.
+    // replace this local write with an insert into `student_applications`; registrar approval performs
+    // the credential issuance transaction.
     return nextApplication;
   },
 
