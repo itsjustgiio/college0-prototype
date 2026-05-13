@@ -1,3 +1,5 @@
+import { localPhaseStateRepository } from "./localPhaseStateRepository";
+
 export type WarningSubjectRole = "student" | "instructor";
 export type WarningSeverity = 1 | 2;
 
@@ -63,6 +65,28 @@ function writeAll(records: WarningRecord[]) {
   writeJson(STORAGE_KEY, records);
 }
 
+function activeWeight(records: WarningRecord[], subjectId: string) {
+  return records
+    .filter((entry) => entry.subjectId === subjectId && !entry.clearedAt)
+    .reduce((total, entry) => total + entry.severity, 0);
+}
+
+function enforceWarningThreshold(record: WarningRecord, allRecords: WarningRecord[]) {
+  const weight = activeWeight(allRecords, record.subjectId);
+  if (weight < 3) return;
+
+  if (record.subjectRole === "student") {
+    localPhaseStateRepository.suspendStudentForWarnings({
+      studentEmail: record.subjectId,
+      warningWeight: weight,
+      reason: "Reached 3 active warning points; suspended for 1 semester and fined by registrar.",
+    });
+    return;
+  }
+
+  localPhaseStateRepository.suspendInstructor(record.subjectId);
+}
+
 export const localWarningsRepository = {
   issue(input: WarningIssueInput): WarningRecord {
     const record: WarningRecord = {
@@ -74,7 +98,9 @@ export const localWarningsRepository = {
       source: input.source,
       issuedAt: nowIsoDate(),
     };
-    writeAll([...readAll(), record]);
+    const nextRecords = [...readAll(), record];
+    writeAll(nextRecords);
+    enforceWarningThreshold(record, nextRecords);
 
     // Future Supabase handoff:
     // insert into a `warnings` table with the same schema.

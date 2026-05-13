@@ -11,13 +11,14 @@ import { useSemesterPhase } from "../hooks/useSemesterPhase";
 import { SEMESTER_PHASES, type SemesterPhase } from "../services/localSemesterRepository";
 import { localCourseRepository, type CourseEditableFields, type CourseState } from "../services/localCourseRepository";
 import { useCourses } from "../hooks/useCourses";
-import { useLastTransitionSummary } from "../hooks/usePhaseState";
+import { useLastTransitionSummary, useRegistrarFines } from "../hooks/usePhaseState";
 import { useAllGraduationApplications, usePendingGraduationApplications } from "../hooks/useGraduation";
 import { useRegistrarReviews, useTabooWords } from "../hooks/useReviews";
 import { useComplaints } from "../hooks/useComplaints";
 import { GRADUATION_THRESHOLD, localGraduationRepository } from "../services/localGraduationRepository";
 import { localReviewsRepository } from "../services/localReviewsRepository";
 import { localComplaintsRepository, type ComplaintRecord, type ComplaintResolutionAction } from "../services/localComplaintsRepository";
+import { localPhaseStateRepository } from "../services/localPhaseStateRepository";
 import { useAuth } from "../auth/AuthProvider";
 import { resolveStudentDisplayName } from "../domain/student";
 import {
@@ -64,10 +65,13 @@ function RegistrarHeader({
 }
 
 export function RegistrarDashboard() {
+  const { user } = useAuth();
   const [phase] = useSemesterPhase();
   const semesterPhases = useMemo(() => buildPhaseTimeline(phase), [phase]);
   const courseCatalog = useCourses();
   const complaintRecords = useComplaints();
+  const fines = useRegistrarFines();
+  const unpaidFines = fines.filter((fine) => !fine.paidAt);
   const [pendingApplicationsCount, setPendingApplicationsCount] = useState(0);
 
   useEffect(() => {
@@ -189,9 +193,50 @@ export function RegistrarDashboard() {
                 {complaintRecords.filter((c) => c.status !== "resolved").length} complaints remain unresolved or under review.
               </div>
             </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+              <div className="text-sm font-medium text-amber-950">Registrar fines due</div>
+              <div className="mt-1 text-sm text-amber-900">
+                {unpaidFines.length} unpaid fine{unpaidFines.length === 1 ? "" : "s"} from 3-warning suspensions.
+              </div>
+            </div>
           </CardBody>
         </Card>
       </div>
+
+      {unpaidFines.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-amber-700" />
+              <h2 className="text-xl text-slate-950">Suspension Fines</h2>
+            </div>
+          </CardHeader>
+          <CardBody className="space-y-3">
+            {unpaidFines.map((fine) => (
+              <div key={fine.id} className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="text-sm font-medium text-amber-950">
+                    {resolveStudentDisplayName(fine.studentEmail)} owes ${fine.amount}
+                  </div>
+                  <div className="mt-1 text-sm text-amber-900">{fine.reason}</div>
+                </div>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() =>
+                    localPhaseStateRepository.markFinePaid({
+                      fineId: fine.id,
+                      registrarEmail: user?.email ?? "registrar@college0.edu",
+                    })
+                  }
+                >
+                  Mark paid
+                </Button>
+              </div>
+            ))}
+          </CardBody>
+        </Card>
+      )}
     </div>
   );
 }

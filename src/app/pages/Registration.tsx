@@ -18,7 +18,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { useCourses } from "../hooks/useCourses";
 import { useStudentEnrollment } from "../hooks/useStudentEnrollment";
 import { useSemesterPhase } from "../hooks/useSemesterPhase";
-import { useSpecialReregEligible } from "../hooks/usePhaseState";
+import { useSpecialReregEligible, useStudentSuspension } from "../hooks/usePhaseState";
 import { SEMESTER_PHASES } from "../services/localSemesterRepository";
 import { formatSchedule } from "../domain/schedule";
 import { localCourseRepository, type CourseState } from "../services/localCourseRepository";
@@ -39,8 +39,9 @@ export function Registration() {
   const email = user?.email ?? "";
   const [phase] = useSemesterPhase();
   const specialReregEligible = useSpecialReregEligible(email);
+  const suspension = useStudentSuspension(email);
   const inSpecialReReg = phase === "running" && specialReregEligible;
-  const isRegistrationOpen = phase === "registration" || inSpecialReReg;
+  const isRegistrationOpen = !suspension && (phase === "registration" || inSpecialReReg);
   const courses = useCourses();
   const enrollment = useStudentEnrollment(email);
   const [feedback, setFeedback] = useState<{ kind: "success" | "error" | "info"; message: string } | null>(null);
@@ -54,6 +55,9 @@ export function Registration() {
     }
     if (course.cancelled) {
       return { kind: "blocked", reason: course.cancelReason ?? "Course is cancelled" };
+    }
+    if (suspension) {
+      return { kind: "blocked", reason: "Suspended students cannot register this semester." };
     }
     if (enrollment.hasPassed(course)) {
       return { kind: "blocked", reason: `Already completed with grade ${enrollment.priorGrade(course)}` };
@@ -166,10 +170,16 @@ export function Registration() {
         <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
           <Lock className="mt-0.5 h-5 w-5 text-amber-700" />
           <div className="text-sm text-amber-900">
-            <p className="font-medium">Registration is locked.</p>
+            <p className="font-medium">{suspension ? "Registration blocked by suspension." : "Registration is locked."}</p>
             <p className="mt-1 text-amber-800">
-              The system is currently in the <span className="font-medium">{SEMESTER_PHASES.find((entry) => entry.id === phase)?.label}</span> phase.
-              Enroll, drop, and waitlist actions reopen when the registrar returns the cycle to Registration.
+              {suspension
+                ? "You reached 3 active warning points and are suspended for 1 semester. Resolve the fine with the registrar before returning to normal registration."
+                : (
+                    <>
+                      The system is currently in the <span className="font-medium">{SEMESTER_PHASES.find((entry) => entry.id === phase)?.label}</span> phase.
+                      Enroll, drop, and waitlist actions reopen when the registrar returns the cycle to Registration.
+                    </>
+                  )}
             </p>
           </div>
         </div>

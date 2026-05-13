@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import {
   localPhaseStateRepository,
+  type RegistrarFineRecord,
+  type StudentSuspensionRecord,
   type TransitionSummary,
 } from "../services/localPhaseStateRepository";
 
@@ -26,6 +28,46 @@ export function useInstructorSuspension(email: string): boolean {
   }, [email]);
 
   return suspended;
+}
+
+export function useStudentSuspension(email: string): StudentSuspensionRecord | null {
+  const [suspension, setSuspension] = useState<StudentSuspensionRecord | null>(() =>
+    localPhaseStateRepository.getStudentSuspension(email),
+  );
+
+  useEffect(() => {
+    const refresh = () => setSuspension(localPhaseStateRepository.getStudentSuspension(email));
+    refresh();
+    return localPhaseStateRepository.subscribe(refresh);
+  }, [email]);
+
+  return suspension;
+}
+
+export function useRegistrarFines(): RegistrarFineRecord[] {
+  const [fines, setFines] = useState<RegistrarFineRecord[]>(() => localPhaseStateRepository.getRegistrarFines());
+
+  useEffect(() => {
+    const refresh = () => setFines(localPhaseStateRepository.getRegistrarFines());
+    refresh();
+    return localPhaseStateRepository.subscribe(refresh);
+  }, []);
+
+  return fines;
+}
+
+export function useStudentFines(email: string): RegistrarFineRecord[] {
+  const [fines, setFines] = useState<RegistrarFineRecord[]>(() =>
+    localPhaseStateRepository.getStudentFines(email),
+  );
+
+  useEffect(() => {
+    const refresh = () => setFines(localPhaseStateRepository.getStudentFines(email));
+    refresh();
+    return localPhaseStateRepository.subscribe(refresh);
+  }, [email]);
+
+  return fines;
 }
 
 export function useLastTransitionSummary(): TransitionSummary | null {

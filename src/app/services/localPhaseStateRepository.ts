@@ -25,9 +25,29 @@ export interface TransitionSummary {
   warningsClearedByHonor?: number;
 }
 
+export interface StudentSuspensionRecord {
+  studentEmail: string;
+  reason: string;
+  warningWeightAtSuspension: number;
+  suspendedAt: string;
+  semester: string;
+}
+
+export interface RegistrarFineRecord {
+  id: string;
+  studentEmail: string;
+  amount: number;
+  reason: string;
+  issuedAt: string;
+  paidAt?: string;
+  paidBy?: string;
+}
+
 interface PhaseState {
   specialReregEligible: string[];
   suspendedInstructors: string[];
+  suspendedStudents: StudentSuspensionRecord[];
+  registrarFines: RegistrarFineRecord[];
   terminatedStudents: string[];
   honorRollStudents: string[];
   graduatedStudents: string[];
@@ -40,6 +60,8 @@ const CHANGE_EVENT = "college0:phaseState:changed";
 const DEFAULT_STATE: PhaseState = {
   specialReregEligible: [],
   suspendedInstructors: [],
+  suspendedStudents: [],
+  registrarFines: [],
   terminatedStudents: [],
   honorRollStudents: [],
   graduatedStudents: [],
@@ -68,6 +90,10 @@ function writeJson<T>(key: string, value: T) {
 
 function normalize(email: string) {
   return email.trim().toLowerCase();
+}
+
+function createFineId() {
+  return `fine-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function readState(): PhaseState {
@@ -138,6 +164,97 @@ export const localPhaseStateRepository = {
     writeState({
       ...state,
       suspendedInstructors: state.suspendedInstructors.filter((entry) => entry !== target),
+    });
+  },
+
+  getSuspendedStudents(): StudentSuspensionRecord[] {
+    return readState().suspendedStudents;
+  },
+
+  getStudentSuspension(email: string): StudentSuspensionRecord | null {
+    const target = normalize(email);
+    return readState().suspendedStudents.find((entry) => entry.studentEmail === target) ?? null;
+  },
+
+  isStudentSuspended(email: string): boolean {
+    if (!email) return false;
+    return Boolean(localPhaseStateRepository.getStudentSuspension(email));
+  },
+
+  suspendStudentForWarnings(input: {
+    studentEmail: string;
+    warningWeight: number;
+    reason: string;
+    fineAmount?: number;
+  }) {
+    const target = normalize(input.studentEmail);
+    const state = readState();
+    const alreadySuspended = state.suspendedStudents.some((entry) => entry.studentEmail === target);
+    const alreadyFined = state.registrarFines.some(
+      (entry) => entry.studentEmail === target && !entry.paidAt && entry.reason === input.reason,
+    );
+
+    const nextSuspendedStudents = alreadySuspended
+      ? state.suspendedStudents
+      : [
+          ...state.suspendedStudents,
+          {
+            studentEmail: target,
+            reason: input.reason,
+            warningWeightAtSuspension: input.warningWeight,
+            suspendedAt: new Date().toISOString(),
+            semester: "next semester",
+          },
+        ];
+
+    const nextFines = alreadyFined
+      ? state.registrarFines
+      : [
+          ...state.registrarFines,
+          {
+            id: createFineId(),
+            studentEmail: target,
+            amount: input.fineAmount ?? 250,
+            reason: input.reason,
+            issuedAt: new Date().toISOString(),
+          },
+        ];
+
+    writeState({
+      ...state,
+      suspendedStudents: nextSuspendedStudents,
+      registrarFines: nextFines,
+    });
+  },
+
+  clearStudentSuspension(email: string) {
+    const target = normalize(email);
+    const state = readState();
+    writeState({
+      ...state,
+      suspendedStudents: state.suspendedStudents.filter((entry) => entry.studentEmail !== target),
+    });
+  },
+
+  getRegistrarFines(): RegistrarFineRecord[] {
+    return readState().registrarFines;
+  },
+
+  getStudentFines(email: string): RegistrarFineRecord[] {
+    const target = normalize(email);
+    return readState().registrarFines.filter((entry) => entry.studentEmail === target);
+  },
+
+  markFinePaid(input: { fineId: string; registrarEmail: string }) {
+    const state = readState();
+    const paidAt = new Date().toISOString();
+    writeState({
+      ...state,
+      registrarFines: state.registrarFines.map((entry) =>
+        entry.id === input.fineId
+          ? { ...entry, paidAt, paidBy: normalize(input.registrarEmail) }
+          : entry,
+      ),
     });
   },
 

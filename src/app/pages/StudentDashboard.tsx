@@ -30,6 +30,7 @@ import { localReviewsRepository, type ReviewRating } from "../services/localRevi
 import { localGradingRepository } from "../services/localGradingRepository";
 import { localComplaintsRepository, type ComplaintAgainstRole } from "../services/localComplaintsRepository";
 import { useComplaints } from "../hooks/useComplaints";
+import { useStudentFines, useStudentSuspension } from "../hooks/usePhaseState";
 import { deriveInstructorEmail } from "../domain/instructor";
 import { formatSchedule } from "../domain/schedule";
 
@@ -41,6 +42,9 @@ export function StudentDashboard() {
   });
   const enrollment = useStudentEnrollment(student.email);
   const { terminated, honorRoll } = useStudentAcademicStatus(student.email);
+  const suspension = useStudentSuspension(student.email);
+  const fines = useStudentFines(student.email);
+  const unpaidFines = fines.filter((fine) => !fine.paidAt);
   const semesterGrades = useStudentGradesThisSemester(student.email);
   const graduation = useGraduationStatus(student.email);
   const { completedCourses } = localCollegeRepository.getStudentCourseSnapshot(student.email);
@@ -114,6 +118,31 @@ export function StudentDashboard() {
             <p className="mt-1 text-red-800">
               Your overall GPA fell below 2.0 or you failed the same course twice. You will not be eligible to
               register for future semesters until the registrar reviews your case.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {suspension && !terminated && (
+        <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4">
+          <ShieldAlert className="mt-0.5 h-5 w-5 text-red-700" />
+          <div className="text-sm text-red-900">
+            <p className="font-medium">Suspended for 1 semester after 3 warning points.</p>
+            <p className="mt-1 text-red-800">
+              Your registration access is blocked for {suspension.semester}. You must pay the registrar fine
+              before returning to normal standing.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {unpaidFines.length > 0 && (
+        <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
+          <AlertCircle className="mt-0.5 h-5 w-5 text-amber-700" />
+          <div className="text-sm text-amber-900">
+            <p className="font-medium">Registrar fine due: ${unpaidFines.reduce((sum, fine) => sum + fine.amount, 0)}</p>
+            <p className="mt-1 text-amber-800">
+              Fine reason: {unpaidFines[0].reason} Contact the registrar to record payment.
             </p>
           </div>
         </div>
