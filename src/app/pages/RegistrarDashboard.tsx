@@ -14,8 +14,6 @@ import { useCourses } from "../hooks/useCourses";
 import { useLastTransitionSummary } from "../hooks/usePhaseState";
 import { useAllGraduationApplications, usePendingGraduationApplications } from "../hooks/useGraduation";
 import { GRADUATION_THRESHOLD, localGraduationRepository } from "../services/localGraduationRepository";
-import { localPhaseStateRepository } from "../services/localPhaseStateRepository";
-import { localWarningsRepository } from "../services/localWarningsRepository";
 import { useAuth } from "../auth/AuthProvider";
 import { resolveStudentDisplayName } from "../domain/student";
 import {
@@ -570,6 +568,194 @@ export function RegistrarApplicationsPage() {
                         </Button>
                       </div>
                     </div>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </CardBody>
+      </Card>
+    </div>
+  );
+}
+
+export function RegistrarGraduationPage() {
+  const { user } = useAuth();
+  const pendingApplications = usePendingGraduationApplications();
+  const allApplications = useAllGraduationApplications();
+  const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
+  const [decisionMessage, setDecisionMessage] = useState("");
+  const [decisionError, setDecisionError] = useState("");
+
+  const recentDecisions = useMemo(
+    () =>
+      allApplications
+        .filter((application) => application.status !== "pending")
+        .sort((a, b) => (b.reviewedAt ?? b.submittedAt).localeCompare(a.reviewedAt ?? a.submittedAt))
+        .slice(0, 8),
+    [allApplications],
+  );
+
+  const review = (applicationId: string, decision: "approved" | "rejected") => {
+    setDecisionMessage("");
+    setDecisionError("");
+
+    try {
+      const reviewerEmail = user?.email ?? "registrar@college0.edu";
+      const note = reviewNotes[applicationId] ?? "";
+
+      if (decision === "approved") {
+        localGraduationRepository.approveApplication({
+          applicationId,
+          reviewerEmail,
+          registrarNote: note,
+        });
+        setDecisionMessage("Graduation application approved.");
+      } else {
+        localGraduationRepository.rejectApplication({
+          applicationId,
+          reviewerEmail,
+          registrarNote: note,
+        });
+        setDecisionMessage("Graduation application rejected and a reckless-application warning was issued.");
+      }
+
+      setReviewNotes((current) => ({ ...current, [applicationId]: "" }));
+    } catch (error) {
+      setDecisionError(error instanceof Error ? error.message : "Unable to complete graduation review.");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <RegistrarHeader
+        title="Graduation Workflow"
+        description="Review graduation applications, record threshold overrides, and finalize student outcomes."
+      />
+
+      {(decisionMessage || decisionError) && (
+        <div className={`rounded-2xl border px-5 py-4 text-sm ${
+          decisionError ? "border-red-200 bg-red-50 text-red-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"
+        }`}>
+          {decisionError || decisionMessage}
+        </div>
+      )}
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <GraduationCap className="h-5 w-5 text-blue-700" />
+            <h2 className="text-xl text-slate-950">Pending Applications</h2>
+          </div>
+        </CardHeader>
+        <CardBody className="space-y-4">
+          {pendingApplications.length === 0 ? (
+            <p className="text-sm text-slate-600">No graduation applications are waiting for review.</p>
+          ) : (
+            pendingApplications.map((application) => {
+              const subThreshold = application.passingCompletionsAtSubmission < GRADUATION_THRESHOLD;
+              const note = reviewNotes[application.id] ?? "";
+              const studentName = resolveStudentDisplayName(application.studentEmail);
+
+              return (
+                <div key={application.id} className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-5">
+                  <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="max-w-2xl">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-lg text-slate-950">{studentName}</h3>
+                        <Badge variant="warning">pending</Badge>
+                        <Badge variant={subThreshold ? "danger" : "success"}>
+                          {application.passingCompletionsAtSubmission}/{GRADUATION_THRESHOLD} passing courses
+                        </Badge>
+                      </div>
+                      <p className="mt-2 text-sm text-slate-700">{application.studentEmail}</p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        Submitted {new Date(application.submittedAt).toLocaleDateString()}
+                      </p>
+                      {subThreshold && (
+                        <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                          Approval is an override below the prototype graduation threshold. A justification is required.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="w-full max-w-xl space-y-3">
+                      <textarea
+                        value={note}
+                        onChange={(event) =>
+                          setReviewNotes((current) => ({
+                            ...current,
+                            [application.id]: event.target.value,
+                          }))
+                        }
+                        placeholder={
+                          subThreshold
+                            ? "Required override justification for approval. Required reason for rejection."
+                            : "Optional approval note. Required reason for rejection."
+                        }
+                        className="min-h-28 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                      />
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => review(application.id, "approved")}
+                          disabled={subThreshold && !note.trim()}
+                        >
+                          {subThreshold ? "Approve with override" : "Approve"}
+                        </Button>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => review(application.id, "rejected")}
+                          disabled={!note.trim()}
+                        >
+                          Reject and warn
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <ClipboardList className="h-5 w-5 text-emerald-700" />
+            <h2 className="text-xl text-slate-950">Recently Decided</h2>
+          </div>
+        </CardHeader>
+        <CardBody className="space-y-3">
+          {recentDecisions.length === 0 ? (
+            <p className="text-sm text-slate-600">No graduation decisions have been recorded yet.</p>
+          ) : (
+            recentDecisions.map((application) => (
+              <div key={application.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-base text-slate-950">{resolveStudentDisplayName(application.studentEmail)}</h3>
+                      <Badge variant={application.status === "approved" ? "success" : "danger"}>
+                        {application.status}
+                      </Badge>
+                      <Badge variant={application.passingCompletionsAtSubmission < GRADUATION_THRESHOLD ? "warning" : "neutral"}>
+                        {application.passingCompletionsAtSubmission}/{GRADUATION_THRESHOLD}
+                      </Badge>
+                    </div>
+                    <p className="mt-2 text-sm text-slate-700">{application.studentEmail}</p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Reviewed {application.reviewedAt ? new Date(application.reviewedAt).toLocaleDateString() : "date unavailable"}
+                      {application.reviewedBy ? ` by ${application.reviewedBy}` : ""}
+                    </p>
+                  </div>
+                  {application.registrarNote && (
+                    <p className="max-w-xl rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                      {application.registrarNote}
+                    </p>
                   )}
                 </div>
               </div>

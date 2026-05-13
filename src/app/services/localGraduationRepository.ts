@@ -1,6 +1,8 @@
 import { localCollegeRepository } from "./localCollegeRepository";
 import { localCourseRepository } from "./localCourseRepository";
 import { localGradingRepository } from "./localGradingRepository";
+import { localPhaseStateRepository } from "./localPhaseStateRepository";
+import { localWarningsRepository } from "./localWarningsRepository";
 
 export type GraduationApplicationStatus = "pending" | "approved" | "rejected";
 
@@ -148,15 +150,21 @@ export const localGraduationRepository = {
     const target = all.find((entry) => entry.id === input.applicationId);
     if (!target) throw new Error("Graduation application not found.");
     if (target.status !== "pending") throw new Error("Application has already been decided.");
+    const note = input.registrarNote?.trim();
+    const requiresOverrideJustification = target.passingCompletionsAtSubmission < GRADUATION_THRESHOLD;
+    if (requiresOverrideJustification && !note) {
+      throw new Error("Override approvals below the graduation threshold require justification.");
+    }
 
     const reviewed: GraduationApplication = {
       ...target,
       status: "approved",
       reviewedAt: new Date().toISOString(),
       reviewedBy: normalize(input.reviewerEmail),
-      registrarNote: input.registrarNote?.trim() || undefined,
+      registrarNote: note || undefined,
     };
     writeAll(all.map((entry) => (entry.id === target.id ? reviewed : entry)));
+    localPhaseStateRepository.markGraduated(target.studentEmail);
     return reviewed;
   },
 
@@ -177,6 +185,13 @@ export const localGraduationRepository = {
       registrarNote: note,
     };
     writeAll(all.map((entry) => (entry.id === target.id ? reviewed : entry)));
+    localWarningsRepository.issue({
+      subjectId: target.studentEmail,
+      subjectRole: "student",
+      severity: 1,
+      reason: note,
+      source: "manual:graduation-reckless",
+    });
     return reviewed;
   },
 

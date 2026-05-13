@@ -20,6 +20,7 @@ import {
 import {
   RegistrarDashboard,
   RegistrarApplicationsPage,
+  RegistrarGraduationPage,
   RegistrarClassSetupPage,
   RegistrarComplaintsPage,
   RegistrarSemesterControlPage,
@@ -85,6 +86,7 @@ export const router = createBrowserRouter([
             children: [
               { index: true, Component: RegistrarDashboard },
               { path: "applications", Component: RegistrarApplicationsPage },
+              { path: "graduation", Component: RegistrarGraduationPage },
               { path: "class-setup", Component: RegistrarClassSetupPage },
               { path: "complaints", Component: RegistrarComplaintsPage },
               { path: "semester-control", Component: RegistrarSemesterControlPage },
