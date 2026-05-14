@@ -13,6 +13,7 @@ export interface SmartRecommendationsResult {
   isFirstSemester: boolean;
   isOnProbation: boolean;
   isNearGraduation: boolean;
+  registeredCount: number;
 }
 
 export function useSmartRecommendations(): SmartRecommendationsResult {
@@ -23,10 +24,17 @@ export function useSmartRecommendations(): SmartRecommendationsResult {
     const email = user?.email ?? "";
     const name = user?.name ?? "";
 
+    const normalizedEmail = email.trim().toLowerCase();
     const profile = localCollegeRepository.getStudentProfile({ name, email });
     const snapshot = localCollegeRepository.getStudentCourseSnapshot(email);
 
     const recommendations = computeRecommendations(profile, snapshot, catalog);
+
+    const registeredCount = catalog.filter(
+      (c) =>
+        c.enrolledStudentIds.includes(normalizedEmail) ||
+        c.waitlistStudentIds.includes(normalizedEmail),
+    ).length;
 
     return {
       recommendations,
@@ -37,6 +45,7 @@ export function useSmartRecommendations(): SmartRecommendationsResult {
       isFirstSemester: snapshot.completedCourses.length === 0 && snapshot.enrolledCourses.length === 0,
       isOnProbation: profile.gpa > 0 && profile.gpa >= 2.0 && profile.gpa <= 2.25,
       isNearGraduation: profile.coursesCompleted >= 7,
+      registeredCount,
     };
   }, [user, catalog]);
 }

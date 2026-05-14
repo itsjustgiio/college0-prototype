@@ -20,12 +20,25 @@ export function computeRecommendations(
   snapshot: StudentCourseSnapshot,
   catalog: CourseState[],
 ): CourseRecommendation[] {
+  const normalizedEmail = profile.email.trim().toLowerCase();
+
   const completedGrades = new Map<string, string>();
   for (const entry of snapshot.completedCourses) {
     completedGrades.set(entry.id, entry.grade);
   }
 
-  const enrolledIds = new Set(snapshot.enrolledCourses.map((c) => c.id));
+  // Merge snapshot enrollment with live course enrollment so both data sources agree
+  const snapshotEnrolledIds = new Set(snapshot.enrolledCourses.map((c) => c.id));
+  const liveEnrolledIds = new Set(
+    catalog
+      .filter(
+        (c) =>
+          c.enrolledStudentIds.includes(normalizedEmail) ||
+          c.waitlistStudentIds.includes(normalizedEmail),
+      )
+      .map((c) => c.id),
+  );
+  const enrolledIds = new Set([...snapshotEnrolledIds, ...liveEnrolledIds]);
   const enrolledCourses = catalog.filter((c) => enrolledIds.has(c.id));
 
   const eligible = catalog.filter((course) => {

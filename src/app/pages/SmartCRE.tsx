@@ -17,6 +17,8 @@ import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
 import { useSmartRecommendations } from "../hooks/useSmartRecommendations";
 import { useSemesterPhase } from "../hooks/useSemesterPhase";
+import { useAuth } from "../auth/AuthProvider";
+import { localCourseRepository } from "../services/localCourseRepository";
 import { formatSchedule } from "../domain/schedule";
 import type { RecommendationReason } from "../services/smartCREService";
 
@@ -41,13 +43,21 @@ function ScoreBadge({ score, rank }: { score: number; rank: number }) {
 
 export function SmartCRE() {
   const [phase] = useSemesterPhase();
-  const { recommendations, gpa, coursesCompleted, isFirstSemester, isOnProbation, isNearGraduation } =
+  const { user } = useAuth();
+  const { recommendations, gpa, coursesCompleted, isFirstSemester, isOnProbation, isNearGraduation, registeredCount } =
     useSmartRecommendations();
-  const [addedCourses, setAddedCourses] = useState<string[]>([]);
+
+  const MAX_COURSES = 4;
+  const atCourseLimit = registeredCount >= MAX_COURSES;
+  const [enrollError, setEnrollError] = useState<string | null>(null);
 
   const handleAdd = (courseId: string) => {
-    if (!addedCourses.includes(courseId)) {
-      setAddedCourses((prev) => [...prev, courseId]);
+    if (!user?.email) return;
+    try {
+      localCourseRepository.enroll(courseId, user.email);
+      setEnrollError(null);
+    } catch (err) {
+      setEnrollError(err instanceof Error ? err.message : "Could not enroll in course.");
     }
   };
 
@@ -76,10 +86,16 @@ export function SmartCRE() {
           <Button variant="primary" className="gap-2">
             <Calendar className="h-4 w-4" />
             Go to registration
-            {addedCourses.length > 0 && <Badge variant="success">{addedCourses.length} saved</Badge>}
           </Button>
         </Link>
       </div>
+
+      {enrollError && (
+        <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4">
+          <AlertTriangle className="mt-0.5 h-5 w-5 text-red-700" />
+          <p className="text-sm text-red-900">{enrollError}</p>
+        </div>
+      )}
 
       {!isRegistrationOpen && (
         <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
@@ -157,7 +173,9 @@ export function SmartCRE() {
       ) : (
         <div className="space-y-4">
           {visibleRecs.map((rec, index) => {
-            const isAdded = addedCourses.includes(rec.course.id);
+            const normalizedEmail = user?.email?.trim().toLowerCase() ?? "";
+            const isEnrolled = rec.course.enrolledStudentIds.includes(normalizedEmail);
+            const isWaitlisted = rec.course.waitlistStudentIds.includes(normalizedEmail);
             const hasConflict = rec.reasons.some((r) => r.factor === "Time Conflict");
             const isGraduationCritical = rec.reasons.some((r) => r.factor === "Graduation Eligible");
 
@@ -197,17 +215,22 @@ export function SmartCRE() {
                         </div>
 
                         <Button
-                          variant={isAdded ? "secondary" : "primary"}
+                          variant={isEnrolled || isWaitlisted ? "secondary" : "primary"}
                           onClick={() => handleAdd(rec.course.id)}
-                          disabled={isAdded || hasConflict}
+                          disabled={isEnrolled || isWaitlisted || hasConflict || atCourseLimit || !isRegistrationOpen}
                           className="shrink-0 gap-2"
                         >
-                          {isAdded ? (
+                          {isEnrolled ? (
                             <>
                               <CheckCircle className="h-4 w-4" />
-                              Saved
+                              Enrolled
                             </>
-                          ) : hasConflict ? (
+                          ) : isWaitlisted ? (
+                            <>
+                              <CheckCircle className="h-4 w-4" />
+                              Waitlisted
+                            </>
+                          ) : hasConflict || atCourseLimit ? (
                             "Conflict"
                           ) : (
                             <>
