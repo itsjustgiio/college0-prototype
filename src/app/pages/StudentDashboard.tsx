@@ -31,6 +31,7 @@ import { localGradingRepository } from "../services/localGradingRepository";
 import { localComplaintsRepository, type ComplaintAgainstRole } from "../services/localComplaintsRepository";
 import { useComplaints } from "../hooks/useComplaints";
 import { useStudentFines, useStudentSuspension } from "../hooks/usePhaseState";
+import { useSemesterPhase } from "../hooks/useSemesterPhase";
 import { deriveInstructorEmail } from "../domain/instructor";
 import { formatSchedule } from "../domain/schedule";
 
@@ -520,6 +521,8 @@ function StudentCourseReviewPanel({
   const ownReview = useOwnCourseReview(courseId, studentEmail);
   const visibleReviews = useVisibleCourseReviews(courseId);
   const summary = useCourseReviewSummary(courseId);
+  const [phase] = useSemesterPhase();
+  const isReviewPhase = phase === "running";
   const gradePosted = Boolean(localGradingRepository.getGrade({ courseId, studentEmail }));
   const [rating, setRating] = useState<ReviewRating>(5);
   const [comment, setComment] = useState("");
@@ -563,6 +566,7 @@ function StudentCourseReviewPanel({
               : `${summary.averageRating.toFixed(2)} average from ${summary.visibleReviewCount} visible review${summary.visibleReviewCount === 1 ? "" : "s"}.`}
           </p>
         </div>
+        {!isReviewPhase && <Badge variant="neutral">Opens during Classes Running</Badge>}
         {gradePosted && <Badge variant="warning">Review closed after grade posting</Badge>}
       </div>
 
@@ -581,7 +585,7 @@ function StudentCourseReviewPanel({
         </div>
       )}
 
-      {!ownReview && !gradePosted && (
+      {!ownReview && !gradePosted && isReviewPhase && (
         <div className="mt-4 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             {([1, 2, 3, 4, 5] as ReviewRating[]).map((value) => (
@@ -611,6 +615,12 @@ function StudentCourseReviewPanel({
               Submit review
             </Button>
           </div>
+        </div>
+      )}
+
+      {!ownReview && !gradePosted && !isReviewPhase && (
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Reviews can be submitted only while classes are running.
         </div>
       )}
 

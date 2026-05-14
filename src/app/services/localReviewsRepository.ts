@@ -1,6 +1,7 @@
 import { deriveInstructorEmail } from "../domain/instructor";
 import { localCourseRepository } from "./localCourseRepository";
 import { localGradingRepository } from "./localGradingRepository";
+import { localSemesterRepository } from "./localSemesterRepository";
 import { localWarningsRepository } from "./localWarningsRepository";
 
 export type ReviewRating = 1 | 2 | 3 | 4 | 5;
@@ -178,6 +179,9 @@ export const localReviewsRepository = {
     const comment = input.comment.trim();
     if (!comment) throw new Error("A review comment is required.");
     if (input.rating < 1 || input.rating > 5) throw new Error("Choose a 1-5 star rating.");
+    if (localSemesterRepository.getPhase() !== "running") {
+      throw new Error("Course reviews are only open during the Classes Running phase.");
+    }
 
     const course = localCourseRepository.get(input.courseId);
     if (!course) throw new Error("Course not found.");
