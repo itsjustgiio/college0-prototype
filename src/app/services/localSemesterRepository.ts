@@ -162,6 +162,9 @@ function applyGradingCloseRules(): TransitionSummary {
     const semesterGpa = localGradingRepository.getStudentSemesterGpa(normalizedEmail);
     const failedTwice = localGradingRepository.hasFailedSameCourseTwice(normalizedEmail);
 
+    // No academic history means no grades to evaluate — skip to avoid 0-GPA false terminations.
+    if (semestersCount === 0) continue;
+
     if (overallGpa < 2.0 || failedTwice) {
       localPhaseStateRepository.terminateStudent(normalizedEmail);
       localWarningsRepository.issue({

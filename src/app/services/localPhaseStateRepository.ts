@@ -248,13 +248,20 @@ export const localPhaseStateRepository = {
   markFinePaid(input: { fineId: string; registrarEmail: string }) {
     const state = readState();
     const paidAt = new Date().toISOString();
+    const fine = state.registrarFines.find((entry) => entry.id === input.fineId);
+    const nextFines = state.registrarFines.map((entry) =>
+      entry.id === input.fineId
+        ? { ...entry, paidAt, paidBy: normalize(input.registrarEmail) }
+        : entry,
+    );
+    // Lift suspension once the fine is cleared — the fine is the hold blocking re-enrollment.
+    const nextSuspendedStudents = fine
+      ? state.suspendedStudents.filter((entry) => entry.studentEmail !== fine.studentEmail)
+      : state.suspendedStudents;
     writeState({
       ...state,
-      registrarFines: state.registrarFines.map((entry) =>
-        entry.id === input.fineId
-          ? { ...entry, paidAt, paidBy: normalize(input.registrarEmail) }
-          : entry,
-      ),
+      registrarFines: nextFines,
+      suspendedStudents: nextSuspendedStudents,
     });
   },
 

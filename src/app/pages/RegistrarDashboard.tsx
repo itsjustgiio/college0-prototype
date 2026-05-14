@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, CheckCircle, ClipboardList, FileText, GraduationCap, Lock, MessageSquare, Plus, Save, Settings, ShieldAlert, XCircle } from "lucide-react";
+import { AlertTriangle, BookOpen, CheckCircle, ClipboardList, FileText, GraduationCap, Lock, MessageSquare, Plus, Save, Settings, ShieldAlert, XCircle } from "lucide-react";
 import { Card, CardHeader, CardBody } from "../components/Card";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
@@ -19,6 +19,8 @@ import { GRADUATION_THRESHOLD, localGraduationRepository } from "../services/loc
 import { localReviewsRepository } from "../services/localReviewsRepository";
 import { localComplaintsRepository, type ComplaintRecord, type ComplaintResolutionAction } from "../services/localComplaintsRepository";
 import { localPhaseStateRepository } from "../services/localPhaseStateRepository";
+import { localGradingRepository } from "../services/localGradingRepository";
+import { deriveInstructorEmail } from "../domain/instructor";
 import { useAuth } from "../auth/AuthProvider";
 import { resolveStudentDisplayName } from "../domain/student";
 import {
@@ -1431,8 +1433,23 @@ export function RegistrarClassSetupPage() {
                       {course.cancelled && <Badge variant="danger">Cancelled</Badge>}
                       {hasDraft && <Badge variant="warning">Unsaved changes</Badge>}
                     </div>
-                    <div className="text-sm text-slate-600">
-                      {course.enrolledStudentIds.length} enrolled - {course.waitlistStudentIds.length} on waitlist
+                    <div className="flex items-center gap-3">
+                      {course.cancelled && isEditable && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            localCourseRepository.uncancel(course.id);
+                            localPhaseStateRepository.unsuspendInstructor(deriveInstructorEmail(course.instructor));
+                            setFeedback({ kind: "success", message: `${course.id} reinstated.` });
+                          }}
+                        >
+                          Reinstate
+                        </Button>
+                      )}
+                      <div className="text-sm text-slate-600">
+                        {course.enrolledStudentIds.length} enrolled · {course.waitlistStudentIds.length} on waitlist
+                      </div>
                     </div>
                   </div>
 
@@ -1564,6 +1581,64 @@ export function RegistrarSemesterControlPage() {
   const activeIndex = SEMESTER_PHASES.findIndex((entry) => entry.id === phase);
   const nextPhase = SEMESTER_PHASES[(activeIndex + 1) % SEMESTER_PHASES.length];
   const lastTransition = useLastTransitionSummary();
+  const courses = useCourses();
+  const [confirmPending, setConfirmPending] = useState(false);
+
+  useEffect(() => { setConfirmPending(false); }, [phase]);
+
+  const advanceChecks = useMemo(() => {
+    const blockers: string[] = [];
+    const warnings: string[] = [];
+
+    if (phase === "setup") {
+      const active = courses.filter((c) => !c.cancelled);
+      if (active.length === 0) {
+        blockers.push("No active courses in the catalog. Add at least one course before opening registration.");
+      } else {
+        const noInstructor = active.filter((c) => !c.instructor.trim());
+        if (noInstructor.length > 0) {
+          blockers.push(`${noInstructor.length} course(s) have no instructor assigned: ${noInstructor.map((c) => c.id).join(", ")}.`);
+        }
+        const noSeats = active.filter((c) => c.seats === 0);
+        if (noSeats.length > 0) {
+          warnings.push(`${noSeats.length} course(s) have 0 seats — students cannot enroll: ${noSeats.map((c) => c.id).join(", ")}.`);
+        }
+      }
+    }
+
+    if (phase === "registration") {
+      const active = courses.filter((c) => !c.cancelled);
+      const willCancel = active.filter((c) => c.enrolledStudentIds.length < 3);
+      if (willCancel.length > 0) {
+        warnings.push(`${willCancel.length} course(s) will be auto-cancelled for falling below the 3-student minimum: ${willCancel.map((c) => c.id).join(", ")}.`);
+      }
+      const totalEnrolled = active.reduce((sum, c) => sum + c.enrolledStudentIds.length, 0);
+      if (totalEnrolled === 0) {
+        warnings.push("No students are currently enrolled in any course.");
+      }
+    }
+
+    if (phase === "grading") {
+      const active = courses.filter((c) => !c.cancelled && c.enrolledStudentIds.length > 0);
+      const withMissing = active.filter((c) => localGradingRepository.getMissingGradeCount(c.id) > 0);
+      if (withMissing.length > 0) {
+        const total = withMissing.reduce((sum, c) => sum + localGradingRepository.getMissingGradeCount(c.id), 0);
+        warnings.push(
+          `${withMissing.length} course(s) still have ${total} ungraded student(s) — advancing will automatically warn those instructors: ${withMissing.map((c) => c.id).join(", ")}.`,
+        );
+      }
+    }
+
+    return { blockers, warnings };
+  }, [phase, courses]);
+
+  function handleAdvanceClick() {
+    if (advanceChecks.warnings.length > 0) {
+      setConfirmPending(true);
+    } else {
+      setPhase(nextPhase.id);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -1579,9 +1654,26 @@ export function RegistrarSemesterControlPage() {
               <Settings className="h-5 w-5 text-blue-700" />
               <h2 className="text-xl text-slate-950">Phase Timeline</h2>
             </div>
-            <Button variant="primary" size="sm" onClick={() => setPhase(nextPhase.id)}>
-              Advance to {nextPhase.label}
-            </Button>
+            {confirmPending ? (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-slate-600">Advance anyway?</span>
+                <Button variant="danger" size="sm" onClick={() => { setPhase(nextPhase.id); setConfirmPending(false); }}>
+                  Confirm
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setConfirmPending(false)}>
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={advanceChecks.blockers.length > 0}
+                onClick={handleAdvanceClick}
+              >
+                Advance to {nextPhase.label}
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardBody className="space-y-3">
@@ -1610,6 +1702,43 @@ export function RegistrarSemesterControlPage() {
               </div>
             </div>
           ))}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            {advanceChecks.blockers.length > 0 ? (
+              <XCircle className="h-5 w-5 text-red-600" />
+            ) : advanceChecks.warnings.length > 0 ? (
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+            ) : (
+              <CheckCircle className="h-5 w-5 text-emerald-600" />
+            )}
+            <h2 className="text-xl text-slate-950">Advance Readiness</h2>
+          </div>
+        </CardHeader>
+        <CardBody className="space-y-2">
+          {advanceChecks.blockers.length === 0 && advanceChecks.warnings.length === 0 ? (
+            <p className="text-sm text-emerald-700">
+              All checks passed. Ready to advance to {nextPhase.label}.
+            </p>
+          ) : (
+            <>
+              {advanceChecks.blockers.map((msg, i) => (
+                <div key={i} className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                  <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                  <span>{msg}</span>
+                </div>
+              ))}
+              {advanceChecks.warnings.map((msg, i) => (
+                <div key={i} className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                  <span>{msg}</span>
+                </div>
+              ))}
+            </>
+          )}
         </CardBody>
       </Card>
 

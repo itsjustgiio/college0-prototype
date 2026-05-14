@@ -198,6 +198,14 @@ export const localCourseRepository = {
     }));
   },
 
+  uncancel(courseId: string) {
+    return mutate(courseId, (course) => ({
+      ...course,
+      cancelled: false,
+      cancelReason: undefined,
+    }));
+  },
+
   subscribe(callback: () => void) {
     if (!hasBrowserStorage()) return () => {};
     window.addEventListener(CHANGE_EVENT, callback);
