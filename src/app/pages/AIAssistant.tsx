@@ -51,6 +51,11 @@ export function AIAssistant() {
     "Which courses should I take next?",
     "When is the registration deadline?",
     "What is my current GPA?",
+    "Where can I eat near CCNY?",
+    "Where can I study on campus?",
+    "Where can I get tutoring?",
+    "Where do I get my student ID?",
+    "Where can I hang out between classes?",
   ];
 
   const handleSend = async () => {
