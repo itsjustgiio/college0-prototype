@@ -27,6 +27,7 @@ import {
   isValidSchedule,
   minutesToTimeInput,
   parseTimeInputToMinutes,
+  schedulesConflict,
   type CourseSchedule,
   type DayOfWeek,
 } from "../domain/schedule";
@@ -1182,6 +1183,23 @@ export function RegistrarClassSetupPage() {
       });
       return;
     }
+
+    if (partial.instructor !== undefined || partial.schedule !== undefined) {
+      const effectiveInstructor = partial.instructor ?? course.instructor;
+      const effectiveSchedule = partial.schedule ?? course.schedule;
+      const instructorConflict = localCourseRepository
+        .list()
+        .filter((c) => c.id !== course.id && c.instructor === effectiveInstructor && !c.cancelled)
+        .find((c) => schedulesConflict(c.schedule, effectiveSchedule));
+      if (instructorConflict) {
+        setFeedback({
+          kind: "error",
+          message: `${effectiveInstructor} already teaches ${instructorConflict.id} at that time.`,
+        });
+        return;
+      }
+    }
+
     const sanitized: Partial<CourseEditableFields> = partial.schedule
       ? { ...partial, schedule: { ...partial.schedule, days: orderedDays(partial.schedule.days) } }
       : partial;
@@ -1242,6 +1260,18 @@ export function RegistrarClassSetupPage() {
       setFeedback({
         kind: "error",
         message: "Pick at least one day and ensure the end time comes after the start time.",
+      });
+      return;
+    }
+
+    const instructorConflict = localCourseRepository
+      .list()
+      .filter((c) => c.instructor === instructor && !c.cancelled)
+      .find((c) => schedulesConflict(c.schedule, schedule));
+    if (instructorConflict) {
+      setFeedback({
+        kind: "error",
+        message: `${instructor} already teaches ${instructorConflict.id} at that time.`,
       });
       return;
     }
