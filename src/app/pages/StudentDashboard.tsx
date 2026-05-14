@@ -25,7 +25,11 @@ import { useStudentEnrollment } from "../hooks/useStudentEnrollment";
 import { useStudentAcademicStatus, useStudentGradesThisSemester } from "../hooks/useGrading";
 import { useGraduationStatus } from "../hooks/useGraduation";
 import { useCourseReviewSummary, useOwnCourseReview, useVisibleCourseReviews } from "../hooks/useReviews";
-import { localGraduationRepository, GRADUATION_THRESHOLD } from "../services/localGraduationRepository";
+import {
+  localGraduationRepository,
+  GRADUATION_THRESHOLD,
+  REQUIRED_GRADUATION_COURSE_IDS,
+} from "../services/localGraduationRepository";
 import { localReviewsRepository, type ReviewRating } from "../services/localReviewsRepository";
 import { localGradingRepository } from "../services/localGradingRepository";
 import { localComplaintsRepository, type ComplaintAgainstRole } from "../services/localComplaintsRepository";
@@ -48,6 +52,7 @@ export function StudentDashboard() {
   const unpaidFines = fines.filter((fine) => !fine.paidAt);
   const semesterGrades = useStudentGradesThisSemester(student.email);
   const graduation = useGraduationStatus(student.email);
+  const missingRequiredGraduationCourses = localGraduationRepository.getMissingRequiredCourses(student.email);
   const { completedCourses } = localCollegeRepository.getStudentCourseSnapshot(student.email);
 
   const handleApplyToGraduate = () => {
@@ -341,6 +346,7 @@ export function StudentDashboard() {
         <GraduationApplyCard
           status={graduation.status}
           passingCompletions={graduation.passingCompletions}
+          missingRequiredCourses={missingRequiredGraduationCourses}
           latestRegistrarNote={graduation.latestApplication?.registrarNote}
           terminated={terminated}
           onApply={handleApplyToGraduate}
@@ -804,12 +810,14 @@ function StudentComplaintPanel({
 function GraduationApplyCard({
   status,
   passingCompletions,
+  missingRequiredCourses,
   latestRegistrarNote,
   terminated,
   onApply,
 }: {
   status: "none" | "pending" | "approved" | "rejected" | "graduated";
   passingCompletions: number;
+  missingRequiredCourses: string[];
   latestRegistrarNote?: string;
   terminated: boolean;
   onApply: () => void;
@@ -849,13 +857,14 @@ function GraduationApplyCard({
     );
   }
 
-  const eligible = passingCompletions >= GRADUATION_THRESHOLD;
-  const disabled = terminated;
+  const hasExactCourseCount = passingCompletions === GRADUATION_THRESHOLD;
+  const eligible = hasExactCourseCount && missingRequiredCourses.length === 0;
+  const disabled = terminated || !eligible;
   const subline = terminated
     ? "Termination blocks new applications."
     : eligible
-      ? "You meet the 8-course threshold."
-      : `${passingCompletions} of ${GRADUATION_THRESHOLD} passing courses — registrar approval needed below threshold.`;
+      ? "You meet the 8-course requirement with all required courses covered."
+      : `${passingCompletions} of ${GRADUATION_THRESHOLD} passing courses. Required courses: ${REQUIRED_GRADUATION_COURSE_IDS.join(", ")}.`;
 
   return (
     <Card className="cursor-pointer transition-all hover:-translate-y-1 hover:shadow-[0_26px_60px_-40px_rgba(15,23,42,0.4)]">
@@ -868,6 +877,13 @@ function GraduationApplyCard({
         {status === "rejected" && latestRegistrarNote && (
           <p className="mt-3 rounded-2xl bg-red-50 px-3 py-2 text-xs text-red-800">
             Last rejection: {latestRegistrarNote}
+          </p>
+        )}
+        {!eligible && !terminated && (
+          <p className="mt-3 rounded-2xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            {missingRequiredCourses.length > 0
+              ? `Missing required: ${missingRequiredCourses.join(", ")}`
+              : `Graduation requires exactly ${GRADUATION_THRESHOLD} passing required courses.`}
           </p>
         )}
         <div className="mt-4 flex items-center justify-between">

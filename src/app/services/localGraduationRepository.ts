@@ -1,6 +1,7 @@
 import { localCollegeRepository } from "./localCollegeRepository";
 import { localCourseRepository } from "./localCourseRepository";
 import { localGradingRepository } from "./localGradingRepository";
+import { localAuthRepository } from "./localAuthRepository";
 import { localPhaseStateRepository } from "./localPhaseStateRepository";
 import { localWarningsRepository } from "./localWarningsRepository";
 
@@ -27,6 +28,16 @@ export interface GraduationApplication {
 }
 
 export const GRADUATION_THRESHOLD = 8;
+export const REQUIRED_GRADUATION_COURSE_IDS = [
+  "CS101",
+  "CS201",
+  "CS301",
+  "CS302",
+  "CS401",
+  "CS402",
+  "MATH201",
+  "MATH301",
+];
 
 const STORAGE_KEY = "college0.graduationApplications";
 const CHANGE_EVENT = "college0:graduation:changed";
@@ -101,6 +112,11 @@ function collectPassingCompletions(email: string): CompletedCourseSnapshot[] {
   return combined;
 }
 
+function getMissingRequiredCourses(passingCourses: CompletedCourseSnapshot[]): string[] {
+  const passedIds = new Set(passingCourses.map((course) => course.id));
+  return REQUIRED_GRADUATION_COURSE_IDS.filter((courseId) => !passedIds.has(courseId));
+}
+
 export const localGraduationRepository = {
   countPassingCompletions(email: string): number {
     return collectPassingCompletions(email).length;
@@ -108,6 +124,10 @@ export const localGraduationRepository = {
 
   listPassingCompletions(email: string): CompletedCourseSnapshot[] {
     return collectPassingCompletions(email);
+  },
+
+  getMissingRequiredCourses(email: string): string[] {
+    return getMissingRequiredCourses(collectPassingCompletions(email));
   },
 
   listApplications(): GraduationApplication[] {
@@ -130,6 +150,12 @@ export const localGraduationRepository = {
     if (existing) return existing;
 
     const passingCourses = collectPassingCompletions(target);
+    const missingRequired = getMissingRequiredCourses(passingCourses);
+    if (passingCourses.length !== GRADUATION_THRESHOLD || missingRequired.length > 0) {
+      throw new Error(
+        `Graduation applications require exactly 8 passing courses covering all required courses. Missing: ${missingRequired.join(", ") || "none"}.`,
+      );
+    }
     const application: GraduationApplication = {
       id: createId(),
       studentEmail: target,
@@ -151,9 +177,11 @@ export const localGraduationRepository = {
     if (!target) throw new Error("Graduation application not found.");
     if (target.status !== "pending") throw new Error("Application has already been decided.");
     const note = input.registrarNote?.trim();
-    const requiresOverrideJustification = target.passingCompletionsAtSubmission < GRADUATION_THRESHOLD;
-    if (requiresOverrideJustification && !note) {
-      throw new Error("Override approvals below the graduation threshold require justification.");
+    const missingRequired = getMissingRequiredCourses(target.passingCoursesAtSubmission);
+    if (target.passingCompletionsAtSubmission !== GRADUATION_THRESHOLD || missingRequired.length > 0) {
+      throw new Error(
+        `Graduation requires exactly ${GRADUATION_THRESHOLD} passing required courses. Missing: ${missingRequired.join(", ") || "none"}.`,
+      );
     }
 
     const reviewed: GraduationApplication = {
@@ -165,6 +193,8 @@ export const localGraduationRepository = {
     };
     writeAll(all.map((entry) => (entry.id === target.id ? reviewed : entry)));
     localPhaseStateRepository.markGraduated(target.studentEmail);
+    localCollegeRepository.archiveGraduatedStudent(target.studentEmail);
+    localAuthRepository.removeStudentCredential(target.studentEmail);
     return reviewed;
   },
 

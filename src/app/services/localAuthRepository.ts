@@ -5,6 +5,7 @@ import { deriveInstructorEmail } from "../domain/instructor";
 const STORAGE_KEYS = {
   credentials: "college0.auth.credentials",
   session: "college0.auth.session",
+  removedCredentials: "college0.auth.removedCredentials",
 } as const;
 
 const seededCredentials: AuthCredentialRecord[] = [
@@ -64,14 +65,20 @@ function ensureSeededCredentials() {
   if (!hasBrowserStorage()) return;
 
   const stored = readJson<AuthCredentialRecord[] | null>(STORAGE_KEYS.credentials, null);
+  const removedEmails = new Set(readJson<string[]>(STORAGE_KEYS.removedCredentials, []));
   if (!stored) {
-    writeJson(STORAGE_KEYS.credentials, seededCredentials);
+    writeJson(
+      STORAGE_KEYS.credentials,
+      seededCredentials.filter((credential) => !removedEmails.has(credential.email.toLowerCase())),
+    );
     return;
   }
 
   const storedEmails = new Set(stored.map((credential) => credential.email.toLowerCase()));
   const missing = seededCredentials.filter(
-    (credential) => !storedEmails.has(credential.email.toLowerCase()),
+    (credential) =>
+      !storedEmails.has(credential.email.toLowerCase()) &&
+      !removedEmails.has(credential.email.toLowerCase()),
   );
 
   if (missing.length > 0) {
@@ -116,6 +123,15 @@ export const localAuthRepository = {
   signOut() {
     if (!hasBrowserStorage()) return;
     window.localStorage.removeItem(STORAGE_KEYS.session);
+  },
+
+  clearSessionForEmail(email: string) {
+    if (!hasBrowserStorage()) return;
+    const normalizedEmail = email.trim().toLowerCase();
+    const session = readJson<AuthUser | null>(STORAGE_KEYS.session, null);
+    if (session?.email.toLowerCase() === normalizedEmail) {
+      window.localStorage.removeItem(STORAGE_KEYS.session);
+    }
   },
 
   changePassword(userId: string, nextPassword: string) {
@@ -196,10 +212,12 @@ export const localAuthRepository = {
     temporaryPassword: string;
   }) {
     const credentials = readCredentials();
+    const normalizedEmail = input.email.trim().toLowerCase();
+    const removedEmails = readJson<string[]>(STORAGE_KEYS.removedCredentials, []);
     const nextRecord: AuthCredentialRecord = {
       id: input.id,
       name: input.name,
-      email: input.email,
+      email: normalizedEmail,
       role: "student",
       studentId: input.studentId,
       password: input.temporaryPassword,
@@ -209,9 +227,13 @@ export const localAuthRepository = {
 
     const nextCredentials = [
       nextRecord,
-      ...credentials.filter((credential) => credential.email !== input.email),
+      ...credentials.filter((credential) => credential.email.toLowerCase() !== normalizedEmail),
     ];
     writeJson(STORAGE_KEYS.credentials, nextCredentials);
+    writeJson(
+      STORAGE_KEYS.removedCredentials,
+      removedEmails.filter((email) => email !== normalizedEmail),
+    );
 
     // Future Supabase handoff:
     // create a real auth account here once approvals are backed by the database.
@@ -221,10 +243,13 @@ export const localAuthRepository = {
   removeStudentCredential(email: string) {
     const normalizedEmail = email.trim().toLowerCase();
     const credentials = readCredentials();
+    const removedEmails = readJson<string[]>(STORAGE_KEYS.removedCredentials, []);
     const nextCredentials = credentials.filter(
       (credential) => credential.email.toLowerCase() !== normalizedEmail,
     );
     writeJson(STORAGE_KEYS.credentials, nextCredentials);
+    writeJson(STORAGE_KEYS.removedCredentials, Array.from(new Set([...removedEmails, normalizedEmail])));
+    localAuthRepository.clearSessionForEmail(normalizedEmail);
 
     // Future Supabase handoff:
     // disable or delete the auth account when an approval is reversed.

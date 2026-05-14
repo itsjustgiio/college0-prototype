@@ -345,11 +345,18 @@ export const localCollegeRepository = {
       seededStudentCourseSnapshots,
     );
     const nextSnapshots = { ...snapshots };
-    delete nextSnapshots[email];
+    delete nextSnapshots[normalizedEmail];
     writeJson(STORAGE_KEYS.studentCourseSnapshots, nextSnapshots);
 
     // Future Supabase handoff:
     // delete the student profile and any seeded snapshots when an approval is reversed.
+  },
+
+  archiveGraduatedStudent(email: string) {
+    localCollegeRepository.removeAcceptedStudentProfile(email);
+
+    // Future Supabase handoff:
+    // mark the student profile archived/graduated and remove it from active roster queries.
   },
 
   upsertInstructorAssignments(input: {
