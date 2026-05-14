@@ -5,7 +5,7 @@ import { Card, CardHeader, CardBody } from "../components/Card";
 import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
 import { useAuth } from "../auth/AuthProvider";
-import { handleAIQuery } from "../services/aiService";
+import { handleAIQuery, type AIRole } from "../services/aiService";
 
 interface Message {
   id: number;
@@ -35,6 +35,8 @@ function describeAIError(error: unknown) {
 
 export function AIAssistant() {
   const { user } = useAuth();
+  const role: AIRole = user?.role ?? "visitor";
+  const backLink = user?.role === "instructor" ? "/instructor" : user?.role === "registrar" ? "/registrar" : user?.role === "student" ? "/student" : "/";
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -46,15 +48,53 @@ export function AIAssistant() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const sampleQuestions = [
-    "What are the graduation requirements?",
-    "Which courses should I take next?",
-    "When is the registration deadline?",
-    "What is my current GPA?",
-  ];
+  const sampleQuestions =
+    role === "student"
+      ? [
+          "What is my current GPA?",
+          "What courses am I enrolled in?",
+          "What are the graduation requirements?",
+          "Which course should I take next?",
+          "When is the registration deadline?",
+          "Where can I eat near CCNY?",
+          "Where can I study on campus?",
+          "Where can I get tutoring?",
+          "Where do I get my student ID?",
+        ]
+      : role === "instructor"
+      ? [
+          "How many students are enrolled in my courses?",
+          "How do I post grades for my students?",
+          "What happens if I miss the grading deadline?",
+          "Can I admit a student from my waitlist?",
+          "Which semester phase do I post grades in?",
+          "What should I do if a student disputes a grade?",
+          "Where can I eat near CCNY?",
+        ]
+      : role === "registrar"
+      ? [
+          "Which semester phase allows class setup?",
+          "What triggers automatic student warnings?",
+          "What happens when registration closes?",
+          "How are courses automatically cancelled?",
+          "What is the honor roll criteria?",
+          "How do I approve a graduation application?",
+          "Where can I eat near CCNY?",
+        ]
+      : [
+          "What courses does College0 offer?",
+          "What are the graduation requirements?",
+          "When is the registration period?",
+          "How do I apply as a student?",
+          "Where can I eat near CCNY?",
+          "Where can I study on campus?",
+          "Where can I get tutoring at CCNY?",
+          "Where do I get my student ID?",
+          "Where can I hang out between classes?",
+        ];
 
   const handleSend = async () => {
-    if (!input.trim() || loading || !user) return;
+    if (!input.trim() || loading) return;
 
     const query = input.trim();
     setInput("");
@@ -62,7 +102,7 @@ export function AIAssistant() {
     setLoading(true);
 
     try {
-      const result = await handleAIQuery(query, user.role, user.email, user.name);
+      const result = await handleAIQuery(query, role, user?.email ?? "", user?.name ?? "Visitor");
       setMessages((prev) => [
         ...prev,
         {
@@ -90,9 +130,11 @@ export function AIAssistant() {
   };
 
   return (
+    <div className={!user ? "min-h-screen bg-slate-50 px-5 py-8 md:px-8" : ""}>
+    <div className={!user ? "mx-auto max-w-[1480px]" : ""}>
     <div className="space-y-6">
       <div>
-        <Link to="/student" className="mb-2 inline-flex items-center gap-2 text-sm font-medium text-blue-700 hover:text-blue-800">
+        <Link to={backLink} className="mb-2 inline-flex items-center gap-2 text-sm font-medium text-blue-700 hover:text-blue-800">
           <ArrowLeft className="h-4 w-4" />
           Back to dashboard
         </Link>
@@ -222,6 +264,8 @@ export function AIAssistant() {
           </Card>
         </div>
       </div>
+    </div>
+    </div>
     </div>
   );
 }

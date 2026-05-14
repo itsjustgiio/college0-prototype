@@ -24,6 +24,7 @@ export function Sidebar({ role }: SidebarProps) {
     { to: "/instructor/courses", icon: BookOpen, label: "My Courses" },
     { to: "/instructor/students", icon: Users, label: "Students" },
     { to: "/instructor/grading", icon: BarChart3, label: "Grading" },
+    { to: "/instructor/ai-assistant", icon: MessageSquare, label: "AI Assistant", badge: "UC-17" },
   ];
 
   const registrarLinks = [
@@ -34,6 +35,7 @@ export function Sidebar({ role }: SidebarProps) {
     { to: "/registrar/class-setup", icon: BookOpen, label: "Class Setup" },
     { to: "/registrar/complaints", icon: MessageSquare, label: "Complaints" },
     { to: "/registrar/semester-control", icon: Settings, label: "Semester Control" },
+    { to: "/registrar/ai-assistant", icon: MessageSquare, label: "AI Assistant", badge: "UC-17" },
   ];
 
   const links = role === "student" ? studentLinks : role === "instructor" ? instructorLinks : registrarLinks;
