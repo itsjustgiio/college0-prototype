@@ -7,6 +7,7 @@ import { formatSchedule } from "../domain/schedule";
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
 
 export type AISource = "database" | "llm";
+export type AIRole = UserRole | "visitor";
 
 export interface AIResponse {
   answer: string;
@@ -24,7 +25,7 @@ function buildCourseCatalog() {
     .join("\n");
 }
 
-function buildRoleContext(role: UserRole, email: string, name: string): string {
+function buildRoleContext(role: AIRole, email: string, name: string): string {
   const policy = [
     "Graduation requirements: complete 8 courses, maintain at least a 2.0 GPA, and remain in good academic standing.",
     "Students should register for 2 to 4 courses during the registration period.",
@@ -34,7 +35,9 @@ function buildRoleContext(role: UserRole, email: string, name: string): string {
   ].join("\n");
 
   let profile = "";
-  if (role === "student") {
+  if (role === "visitor") {
+    profile = "User is a visitor (not logged in). Provide only publicly available information. Do not reference any personal academic records.";
+  } else if (role === "student") {
     const student = localCollegeRepository.getStudentProfile({ name, email });
     const snapshot = localCollegeRepository.getStudentCourseSnapshot(email);
     const enrolled = snapshot.enrolledCourses.length
@@ -57,7 +60,7 @@ function buildRoleContext(role: UserRole, email: string, name: string): string {
     profile = [
       `Instructor: ${name} (${email})`,
       `Assigned courses: ${assignedCourses.map((course) => `${course.id} ${course.name}`).join(", ") || "none"}`,
-      `Current roster: ${roster.map((student) => `${student.name} (${student.course}, ${student.status})`).join(", ") || "none"}`,
+      `Current roster: ${roster.map((student) => `${student.name} (${student.course}, grade: ${student.grade}, status: ${student.status})`).join(", ") || "none"}`,
     ].join("\n");
   } else {
     profile = `Registrar: ${name} (${email}); full administrative access to College0 records.`;
@@ -77,7 +80,8 @@ function buildRoleContext(role: UserRole, email: string, name: string): string {
 
 interface LocalRule {
   keywords: string[];
-  answer: (role: UserRole, email: string, name: string) => string;
+  roles?: AIRole[];
+  answer: (role: AIRole, email: string, name: string) => string;
 }
 
 const localRules: LocalRule[] = [
@@ -88,11 +92,13 @@ const localRules: LocalRule[] = [
   },
   {
     keywords: ["registration", "register", "enroll", "enrollment", "waitlist", "semester"],
+    roles: ["student", "visitor"],
     answer: () =>
       "Students register for 2 to 4 courses during the registration period. Full classes place students on the waitlist, and the instructor controls waitlist admission.",
   },
   {
     keywords: ["what is my gpa", "show my gpa", "current gpa", "check my gpa", "view my gpa"],
+    roles: ["student"],
     answer: (_, email, name) => {
       const student = localCollegeRepository.getStudentProfile({ name, email });
       return `Your current GPA is ${student.gpa}. You have completed ${student.coursesCompleted} of 8 required courses and your standing is "${student.status}."`;
@@ -100,6 +106,7 @@ const localRules: LocalRule[] = [
   },
   {
     keywords: ["warning", "suspend", "standing", "academic status", "my status"],
+    roles: ["student"],
     answer: (_, email, name) => {
       const student = localCollegeRepository.getStudentProfile({ name, email });
       return `Your academic status is "${student.status}" with ${student.warnings} warning(s) on the current profile.`;
@@ -107,6 +114,7 @@ const localRules: LocalRule[] = [
   },
   {
     keywords: ["my course", "current course", "taking", "schedule", "this semester", "enrolled"],
+    roles: ["student"],
     answer: (_, email) => {
       const snapshot = localCollegeRepository.getStudentCourseSnapshot(email);
       if (!snapshot.enrolledCourses.length) return "You are not currently enrolled in any courses in the local record.";
@@ -147,9 +155,13 @@ const localRules: LocalRule[] = [
   },
 ];
 
-function tryLocalMatch(query: string, role: UserRole, email: string, name: string): string | null {
+function tryLocalMatch(query: string, role: AIRole, email: string, name: string): string | null {
   const normalizedQuery = query.toLowerCase();
-  const rule = localRules.find((entry) => entry.keywords.some((keyword) => normalizedQuery.includes(keyword)));
+  const rule = localRules.find(
+    (entry) =>
+      entry.keywords.some((keyword) => normalizedQuery.includes(keyword)) &&
+      (!entry.roles || entry.roles.includes(role)),
+  );
   return rule ? rule.answer(role, email, name) : null;
 }
 
@@ -175,7 +187,7 @@ Question: ${query}`;
 
 export async function handleAIQuery(
   query: string,
-  role: UserRole,
+  role: AIRole,
   email: string,
   name: string,
 ): Promise<AIResponse> {

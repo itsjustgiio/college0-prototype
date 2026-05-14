@@ -79,6 +79,12 @@ export function Public() {
       title: "Registrar",
       description: "Applications, policy, oversight.",
     },
+    {
+      to: "/ai-assistant",
+      icon: Sparkles,
+      title: "AI Assistant",
+      description: "Ask about courses, CCNY, and more.",
+    },
   ];
 
   const submitStudentApplication = async (event: FormEvent<HTMLFormElement>) => {
