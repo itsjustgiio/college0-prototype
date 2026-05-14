@@ -190,6 +190,19 @@ export const localCourseRepository = {
     });
   },
 
+  removeFromWaitlist(courseId: string, studentEmail: string) {
+    const email = normalizeEmail(studentEmail);
+    return mutate(courseId, (course) => {
+      if (!course.waitlistStudentIds.includes(email)) {
+        throw new Error(`Student is not on the waitlist for ${courseId}.`);
+      }
+      return {
+        ...course,
+        waitlistStudentIds: course.waitlistStudentIds.filter((id) => id !== email),
+      };
+    });
+  },
+
   markCancelled(courseId: string, reason: string) {
     return mutate(courseId, (course) => ({
       ...course,

@@ -197,7 +197,7 @@ export function AIAssistant() {
               <div className="flex justify-start">
                 <div className="inline-flex items-center gap-2 rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Thinking...
+                  ...
                 </div>
               </div>
             )}

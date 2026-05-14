@@ -202,6 +202,22 @@ export function InstructorCoursesPage() {
     }
   };
 
+  const decline = (courseId: string, studentEmail: string) => {
+    setAdmissionMessage(null);
+    try {
+      localCourseRepository.removeFromWaitlist(courseId, studentEmail);
+      setAdmissionMessage({
+        kind: "success",
+        message: `Removed ${resolveStudentDisplayName(studentEmail)} from the ${courseId} waitlist.`,
+      });
+    } catch (error) {
+      setAdmissionMessage({
+        kind: "error",
+        message: error instanceof Error ? error.message : "Unable to remove student from waitlist.",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <InstructorHeader
@@ -340,16 +356,25 @@ export function InstructorCoursesPage() {
                                 <div className="mt-1 text-xs text-slate-500">{studentEmail}</div>
                               </div>
                             </div>
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              className="gap-2"
-                              onClick={() => admit(course.id, studentEmail)}
-                              disabled={!canAdmit}
-                            >
-                              <UserPlus className="h-4 w-4" />
-                              Admit
-                            </Button>
+                            <div className="flex flex-wrap justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => decline(course.id, studentEmail)}
+                              >
+                                Decline
+                              </Button>
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                className="gap-2"
+                                onClick={() => admit(course.id, studentEmail)}
+                                disabled={!canAdmit}
+                              >
+                                <UserPlus className="h-4 w-4" />
+                                Admit
+                              </Button>
+                            </div>
                           </div>
                         );
                       })}
