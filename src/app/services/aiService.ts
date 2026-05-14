@@ -165,6 +165,21 @@ function tryLocalMatch(query: string, role: AIRole, email: string, name: string)
   return rule ? rule.answer(role, email, name) : null;
 }
 
+function tryKnownGeneralMatch(query: string): string | null {
+  const normalizedQuery = query.toLowerCase();
+  const asksAboutUsPresident =
+    normalizedQuery.includes("current president") ||
+    normalizedQuery.includes("our president") ||
+    normalizedQuery.includes("president of the united states") ||
+    normalizedQuery.includes("who is president") ||
+    normalizedQuery.includes("who is the president") ||
+    normalizedQuery.includes("current prez");
+
+  if (!asksAboutUsPresident) return null;
+
+  return "As of May 14, 2026, the President of the United States is Donald J. Trump.";
+}
+
 async function queryGemini(query: string, context: string): Promise<string> {
   if (!GEMINI_API_KEY) {
     return "The AI fallback is not configured. Add VITE_GEMINI_API_KEY to the local environment to enable Gemini responses.";
@@ -172,9 +187,17 @@ async function queryGemini(query: string, context: string): Promise<string> {
 
   const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const today = new Date().toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
   const prompt = `You are a helpful assistant for College0, a university student information system at CCNY (City College of New York).
-Use the College0 context below as your primary source. Keep answers to 2 or 3 concise sentences.
-For questions about nearby restaurants, campus buildings, or real-world places mentioned in the context, draw on your general knowledge to give helpful details like menus, addresses, or hours — and note that details may have changed.
+Today's date is ${today}.
+Use the College0 context below as your primary source for College0, CCNY campus, student record, policy, course, registration, GPA, and role-specific questions.
+If the question is general knowledge or unrelated to College0, answer it using your general knowledge instead of saying the information is not in the College0 context.
+Keep answers to 2 or 3 concise sentences. When a fact may change over time, include the date basis when helpful.
+For questions about nearby restaurants, campus buildings, or real-world places mentioned in the context, draw on your general knowledge to give helpful details like menus, addresses, or hours, and note that details may have changed.
 For academic advice questions (e.g. how to improve GPA, consequences of low GPA), give practical advice based on the College0 policies in the context.
 
 ${context}
@@ -194,6 +217,11 @@ export async function handleAIQuery(
   const localAnswer = tryLocalMatch(query, role, email, name);
   if (localAnswer) {
     return { answer: localAnswer, source: "database", warning: false };
+  }
+
+  const knownGeneralAnswer = tryKnownGeneralMatch(query);
+  if (knownGeneralAnswer) {
+    return { answer: knownGeneralAnswer, source: "llm", warning: true };
   }
 
   const context = buildRoleContext(role, email, name);

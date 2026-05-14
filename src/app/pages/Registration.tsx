@@ -250,6 +250,12 @@ export function Registration() {
   const totalCredits = enrollment.enrolled.reduce((sum, course) => sum + course.credits, 0);
   const plannedCredits = plannedCourses.reduce((sum, course) => sum + course.credits, 0);
   const registeredCourses = [...enrollment.enrolled, ...enrollment.waitlisted, ...plannedCourses];
+  const currentPhase = SEMESTER_PHASES.find((entry) => entry.id === phase) ?? SEMESTER_PHASES[1];
+  const phaseStatus = isRegistrationOpen
+    ? inSpecialReReg
+      ? "Special re-registration is open for replacement courses."
+      : "Registration is open. You can enroll, drop, or join waitlists now."
+    : "Planning mode only. You can build a schedule, but enrollment actions are locked.";
 
   return (
     <div className="space-y-6">
@@ -304,6 +310,32 @@ export function Registration() {
         </div>
       )}
 
+      <div
+        className={`rounded-[28px] border px-5 py-5 ${
+          isRegistrationOpen
+            ? "border-emerald-200 bg-emerald-50"
+            : "border-blue-200 bg-blue-50"
+        }`}
+      >
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-3">
+            <Clock className={`mt-0.5 h-5 w-5 ${isRegistrationOpen ? "text-emerald-700" : "text-blue-700"}`} />
+            <div>
+              <p className={`text-xs font-medium uppercase tracking-[0.18em] ${isRegistrationOpen ? "text-emerald-700" : "text-blue-700"}`}>
+                Current semester phase
+              </p>
+              <h2 className="mt-1 text-xl text-slate-950">{currentPhase.label}</h2>
+              <p className={`mt-1 text-sm leading-6 ${isRegistrationOpen ? "text-emerald-900" : "text-blue-900"}`}>
+                {phaseStatus}
+              </p>
+            </div>
+          </div>
+          <div className="max-w-xl rounded-2xl border border-white/60 bg-white/70 px-4 py-3 text-sm leading-6 text-slate-700">
+            {currentPhase.description}
+          </div>
+        </div>
+      </div>
+
       <Card className="border-blue-200 bg-blue-50">
         <CardBody>
           <div className="flex items-start gap-3">
@@ -342,6 +374,7 @@ export function Registration() {
         onSavePersonalTimes={savePersonalTimes}
         totalCredits={totalCredits + plannedCredits}
         registrationOpen={isRegistrationOpen}
+        activePhaseLabel={currentPhase.label}
       />
 
       <div className="grid gap-6 xl:grid-cols-[1.65fr_0.9fr]">
@@ -598,6 +631,7 @@ function ScheduleBuilder({
   onSavePersonalTimes,
   totalCredits,
   registrationOpen,
+  activePhaseLabel,
 }: {
   registeredCourses: CourseState[];
   waitlistedCourseIds: Set<string>;
@@ -606,6 +640,7 @@ function ScheduleBuilder({
   onSavePersonalTimes: (blocks: PersonalTimeBlock[]) => void;
   totalCredits: number;
   registrationOpen: boolean;
+  activePhaseLabel: string;
 }) {
   const [selectedOpen, setSelectedOpen] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -682,6 +717,9 @@ function ScheduleBuilder({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-sm">
+            <Badge variant={registrationOpen ? "success" : "info"}>
+              Phase: {activePhaseLabel}
+            </Badge>
             <Badge variant="neutral">Result 1 of 1</Badge>
             <Badge variant={registeredCourses.length >= MIN_COURSES ? "success" : "warning"}>
               {registeredCourses.length}/{MAX_COURSES} courses

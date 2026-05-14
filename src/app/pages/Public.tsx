@@ -35,9 +35,11 @@ export function Public() {
   const [studentForm, setStudentForm] = useState({ applicantName: "", email: "", gpa: "" });
   const [studentSubmitState, setStudentSubmitState] = useState<"idle" | "success" | "error">("idle");
   const [studentSubmitMessage, setStudentSubmitMessage] = useState("");
+  const [studentApplicationOpen, setStudentApplicationOpen] = useState(false);
   const [instructorForm, setInstructorForm] = useState({ applicantName: "", email: "", subjectArea: "" });
   const [instructorSubmitState, setInstructorSubmitState] = useState<"idle" | "success" | "error">("idle");
   const [instructorSubmitMessage, setInstructorSubmitMessage] = useState("");
+  const [instructorApplicationOpen, setInstructorApplicationOpen] = useState(false);
   const [statusLookup, setStatusLookup] = useState({ type: "student" as "student" | "instructor", email: "" });
   const [statusLookupMessage, setStatusLookupMessage] = useState("");
   const [statusLookupResult, setStatusLookupResult] = useState<
@@ -87,6 +89,8 @@ export function Public() {
     },
   ];
 
+  const requiredMark = <span className="ml-1 text-red-600" aria-hidden="true">*</span>;
+
   const submitStudentApplication = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setStudentSubmitState("idle");
@@ -113,7 +117,7 @@ export function Public() {
     });
 
     setStudentSubmitState("success");
-    setStudentSubmitMessage("Student application submitted for registrar review.");
+    setStudentSubmitMessage("Thanks for applying. Watch your email for the registrar decision, or use application lookup to check your status.");
     setStudentForm({ applicantName: "", email: "", gpa: "" });
   };
 
@@ -136,7 +140,7 @@ export function Public() {
     });
 
     setInstructorSubmitState("success");
-    setInstructorSubmitMessage("Instructor application submitted for registrar review.");
+    setInstructorSubmitMessage("Thanks for applying. Watch your email for the registrar decision, or use application lookup to check your status.");
     setInstructorForm({ applicantName: "", email: "", subjectArea: "" });
   };
 
@@ -289,7 +293,7 @@ export function Public() {
             </div>
 
             <div className="mt-8 flex flex-wrap gap-3">
-              <Dialog>
+              <Dialog open={studentApplicationOpen} onOpenChange={setStudentApplicationOpen}>
                 <DialogTrigger className="rounded-2xl bg-white px-4 py-3 text-sm font-medium text-slate-950 transition-colors hover:bg-blue-50">
                   Apply as student
                 </DialogTrigger>
@@ -297,60 +301,92 @@ export function Public() {
                   <DialogHeader className="border-b border-slate-200 px-6 py-5">
                     <DialogTitle className="text-2xl text-slate-950">Student application</DialogTitle>
                     <DialogDescription className="text-sm leading-6 text-slate-600">
-                      Submit a visitor application for registrar review.
+                      Submit your name, email, and current GPA for registrar review. GPA is used to generate the initial admissions recommendation.
                     </DialogDescription>
                   </DialogHeader>
-                  <form className="space-y-4 px-6 py-5" onSubmit={submitStudentApplication}>
-                    <label className="block">
-                      <span className="text-sm font-medium text-slate-700">Full name</span>
-                      <input
-                        value={studentForm.applicantName}
-                        onChange={(event) => setStudentForm((form) => ({ ...form, applicantName: event.target.value }))}
-                        className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="text-sm font-medium text-slate-700">Email</span>
-                      <input
-                        type="email"
-                        value={studentForm.email}
-                        onChange={(event) => setStudentForm((form) => ({ ...form, email: event.target.value }))}
-                        className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="text-sm font-medium text-slate-700">Current GPA</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max="4"
-                        value={studentForm.gpa}
-                        onChange={(event) => setStudentForm((form) => ({ ...form, gpa: event.target.value }))}
-                        className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
-                      />
-                    </label>
-
-                    {studentSubmitMessage && (
-                      <div
-                        className={`rounded-2xl px-4 py-3 text-sm ${
-                          studentSubmitState === "success"
-                            ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-                            : "border border-red-200 bg-red-50 text-red-700"
-                        }`}
-                      >
-                        {studentSubmitMessage}
+                  {studentSubmitState === "success" ? (
+                    <div className="px-6 py-6">
+                      <div className="rounded-[24px] border border-emerald-200 bg-emerald-50 px-5 py-5 text-emerald-900">
+                        <h3 className="text-lg font-medium">Application submitted</h3>
+                        <p className="mt-2 text-sm leading-6">{studentSubmitMessage}</p>
                       </div>
-                    )}
+                      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                        <button
+                          type="button"
+                          onClick={() => setStudentApplicationOpen(false)}
+                          className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white hover:bg-slate-800"
+                        >
+                          Return to dashboard
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStudentSubmitState("idle");
+                            setStudentSubmitMessage("");
+                          }}
+                          className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          Start new application
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <form className="space-y-4 px-6 py-5" onSubmit={submitStudentApplication}>
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-700">Full name{requiredMark}</span>
+                        <input
+                          required
+                          value={studentForm.applicantName}
+                          onChange={(event) => setStudentForm((form) => ({ ...form, applicantName: event.target.value }))}
+                          className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-700">Email{requiredMark}</span>
+                        <input
+                          required
+                          type="email"
+                          value={studentForm.email}
+                          onChange={(event) => setStudentForm((form) => ({ ...form, email: event.target.value }))}
+                          className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-700">Current GPA{requiredMark}</span>
+                        <span className="mt-1 block text-xs leading-5 text-slate-500">
+                          Used for the automatic recommendation rule. The registrar still makes the final decision.
+                        </span>
+                        <input
+                          required
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="4"
+                          value={studentForm.gpa}
+                          onChange={(event) => setStudentForm((form) => ({ ...form, gpa: event.target.value }))}
+                          className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                        />
+                      </label>
 
-                    <button className="w-full rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white hover:bg-slate-800">
-                      Submit student application
-                    </button>
-                  </form>
+                      <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-900">
+                        Admissions rule: applications above a 3.0 GPA are recommended for acceptance while program seats are available. Registrar overrides require a reason.
+                      </div>
+
+                      {studentSubmitMessage && (
+                        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                          {studentSubmitMessage}
+                        </div>
+                      )}
+
+                      <button className="w-full rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white hover:bg-slate-800">
+                        Submit student application
+                      </button>
+                    </form>
+                  )}
                 </DialogContent>
               </Dialog>
 
-              <Dialog>
+              <Dialog open={instructorApplicationOpen} onOpenChange={setInstructorApplicationOpen}>
                 <DialogTrigger className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-white/15">
                   Apply as instructor
                 </DialogTrigger>
@@ -361,49 +397,74 @@ export function Public() {
                       Submit a teaching application for registrar review.
                     </DialogDescription>
                   </DialogHeader>
-                  <form className="space-y-4 px-6 py-5" onSubmit={submitInstructorApplication}>
-                    <label className="block">
-                      <span className="text-sm font-medium text-slate-700">Full name</span>
-                      <input
-                        value={instructorForm.applicantName}
-                        onChange={(event) => setInstructorForm((form) => ({ ...form, applicantName: event.target.value }))}
-                        className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="text-sm font-medium text-slate-700">Email</span>
-                      <input
-                        type="email"
-                        value={instructorForm.email}
-                        onChange={(event) => setInstructorForm((form) => ({ ...form, email: event.target.value }))}
-                        className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="text-sm font-medium text-slate-700">Subject area</span>
-                      <input
-                        value={instructorForm.subjectArea}
-                        onChange={(event) => setInstructorForm((form) => ({ ...form, subjectArea: event.target.value }))}
-                        className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
-                      />
-                    </label>
-
-                    {instructorSubmitMessage && (
-                      <div
-                        className={`rounded-2xl px-4 py-3 text-sm ${
-                          instructorSubmitState === "success"
-                            ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-                            : "border border-red-200 bg-red-50 text-red-700"
-                        }`}
-                      >
-                        {instructorSubmitMessage}
+                  {instructorSubmitState === "success" ? (
+                    <div className="px-6 py-6">
+                      <div className="rounded-[24px] border border-emerald-200 bg-emerald-50 px-5 py-5 text-emerald-900">
+                        <h3 className="text-lg font-medium">Application submitted</h3>
+                        <p className="mt-2 text-sm leading-6">{instructorSubmitMessage}</p>
                       </div>
-                    )}
+                      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                        <button
+                          type="button"
+                          onClick={() => setInstructorApplicationOpen(false)}
+                          className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white hover:bg-slate-800"
+                        >
+                          Return to dashboard
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setInstructorSubmitState("idle");
+                            setInstructorSubmitMessage("");
+                          }}
+                          className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          Start new application
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <form className="space-y-4 px-6 py-5" onSubmit={submitInstructorApplication}>
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-700">Full name{requiredMark}</span>
+                        <input
+                          required
+                          value={instructorForm.applicantName}
+                          onChange={(event) => setInstructorForm((form) => ({ ...form, applicantName: event.target.value }))}
+                          className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-700">Email{requiredMark}</span>
+                        <input
+                          required
+                          type="email"
+                          value={instructorForm.email}
+                          onChange={(event) => setInstructorForm((form) => ({ ...form, email: event.target.value }))}
+                          className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-700">Subject area{requiredMark}</span>
+                        <input
+                          required
+                          value={instructorForm.subjectArea}
+                          onChange={(event) => setInstructorForm((form) => ({ ...form, subjectArea: event.target.value }))}
+                          className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                        />
+                      </label>
 
-                    <button className="w-full rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white hover:bg-slate-800">
-                      Submit instructor application
-                    </button>
-                  </form>
+                      {instructorSubmitMessage && (
+                        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                          {instructorSubmitMessage}
+                        </div>
+                      )}
+
+                      <button className="w-full rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white hover:bg-slate-800">
+                        Submit instructor application
+                      </button>
+                    </form>
+                  )}
                 </DialogContent>
               </Dialog>
 
@@ -421,8 +482,9 @@ export function Public() {
                   <form className="space-y-4 px-6 py-5" onSubmit={checkApplicationStatus}>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="block">
-                        <span className="text-sm font-medium text-slate-700">Application type</span>
+                        <span className="text-sm font-medium text-slate-700">Application type{requiredMark}</span>
                         <select
+                          required
                           value={statusLookup.type}
                           onChange={(event) =>
                             setStatusLookup((lookup) => ({
@@ -437,8 +499,9 @@ export function Public() {
                         </select>
                       </label>
                       <label className="block">
-                        <span className="text-sm font-medium text-slate-700">Email</span>
+                        <span className="text-sm font-medium text-slate-700">Email{requiredMark}</span>
                         <input
+                          required
                           type="email"
                           value={statusLookup.email}
                           onChange={(event) => setStatusLookup((lookup) => ({ ...lookup, email: event.target.value }))}
@@ -471,9 +534,8 @@ export function Public() {
 
                         {statusLookupResult.type === "student" && statusLookupResult.application.status === "approved" && (
                           <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                            <p>Student ID: {statusLookupResult.application.generatedStudentId}</p>
-                            <p>Temporary password: {statusLookupResult.application.issuedTemporaryPassword}</p>
-                            <p className="mt-2">Use these credentials to log in and create a new password.</p>
+                            <p>Your student application was approved.</p>
+                            <p className="mt-2">Check your email for your student ID, temporary password, and next steps.</p>
                           </div>
                         )}
 
@@ -488,9 +550,9 @@ export function Public() {
                         {statusLookupResult.type === "instructor" &&
                           statusLookupResult.application.status === "approved" && (
                             <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-                              <p>Temporary password: {statusLookupResult.application.issuedTemporaryPassword}</p>
+                              <p>Your instructor application was approved.</p>
                               <p>Assigned classes: {statusLookupResult.application.assignedCourseIds?.join(", ") || "Pending assignment"}</p>
-                              <p className="mt-2">Use the temporary password to log in and create a new password.</p>
+                              <p className="mt-2">Check your email for your temporary password and login instructions.</p>
                             </div>
                           )}
                       </div>

@@ -270,7 +270,7 @@ export const localCollegeRepository = {
     const assignedCourseIds = assignments[input.email];
     const catalog = localCourseRepository.list();
 
-    if (assignedCourseIds?.length) {
+    if (assignedCourseIds !== undefined) {
       return catalog.filter((course) => assignedCourseIds.includes(course.id));
     }
 
@@ -376,6 +376,21 @@ export const localCollegeRepository = {
     // Future Supabase handoff:
     // replace this with insert/update operations for instructor-course assignments.
     return input.assignedCourseIds;
+  },
+
+  removeInstructorAssignments(email: string) {
+    ensureSeededAcademicData();
+    const normalizedEmail = email.trim().toLowerCase();
+    const assignments = readJson<Record<string, string[]>>(
+      STORAGE_KEYS.instructorAssignments,
+      seededInstructorAssignments,
+    );
+    const nextAssignments = { ...assignments };
+    delete nextAssignments[normalizedEmail];
+    writeJson(STORAGE_KEYS.instructorAssignments, nextAssignments);
+
+    // Future Supabase handoff:
+    // delete instructor-course assignment rows when an approval is reversed.
   },
 
   // Future Supabase handoff:

@@ -59,9 +59,71 @@ export function StudentDashboard() {
     if (!student.email) return;
     localGraduationRepository.submitApplication(student.email);
   };
+  const handleDemoQualifyForGraduation = () => {
+    if (!student.email) return;
+    localGraduationRepository.submitDemoQualifiedApplication(student.email);
+  };
   const totalCoursesRequired = 8;
   const coursesCompleted = student.coursesCompleted;
   const progressPercentage = (coursesCompleted / totalCoursesRequired) * 100;
+
+  if (user?.role === "student" && user.needsStudentTutorial) {
+    return (
+      <div className="space-y-8">
+        <section className="rounded-[28px] border border-blue-200 bg-blue-50 px-5 py-5 md:px-6 md:py-6">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-3xl">
+              <div className="flex items-center gap-2 text-blue-950">
+                <CircleCheckBig className="h-5 w-5 text-blue-700" />
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-blue-700">Required new student tutorial</p>
+              </div>
+              <h2 className="mt-3 text-2xl text-slate-950">Complete the tutorial to enter your workspace</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-700">
+                New students must review the core College0 workflow before using registration, records, recommendations, or the assistant.
+              </p>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="rounded-2xl border border-blue-100 bg-white px-4 py-4">
+                  <Calendar className="h-5 w-5 text-blue-700" />
+                  <p className="mt-3 text-sm font-medium text-slate-950">Register for courses</p>
+                  <p className="mt-1 text-sm leading-5 text-slate-600">Select 2-4 courses each semester with no time conflicts.</p>
+                </div>
+                <div className="rounded-2xl border border-blue-100 bg-white px-4 py-4">
+                  <ClipboardList className="h-5 w-5 text-emerald-700" />
+                  <p className="mt-3 text-sm font-medium text-slate-950">View academic records</p>
+                  <p className="mt-1 text-sm leading-5 text-slate-600">Track completed courses, grades, GPA, and graduation progress.</p>
+                </div>
+                <div className="rounded-2xl border border-blue-100 bg-white px-4 py-4">
+                  <Star className="h-5 w-5 text-amber-600" />
+                  <p className="mt-3 text-sm font-medium text-slate-950">Write course reviews</p>
+                  <p className="mt-1 text-sm leading-5 text-slate-600">Rate courses 1-5 stars during the semester before grades are posted.</p>
+                </div>
+                <div className="rounded-2xl border border-blue-100 bg-white px-4 py-4">
+                  <Sparkles className="h-5 w-5 text-purple-700" />
+                  <p className="mt-3 text-sm font-medium text-slate-950">Smart recommendations</p>
+                  <p className="mt-1 text-sm leading-5 text-slate-600">Let the CRE engine rank courses by fit, rating, and graduation progress.</p>
+                </div>
+                <div className="rounded-2xl border border-blue-100 bg-white px-4 py-4">
+                  <MessageSquare className="h-5 w-5 text-amber-700" />
+                  <p className="mt-3 text-sm font-medium text-slate-950">AI assistant</p>
+                  <p className="mt-1 text-sm leading-5 text-slate-600">Ask about policies, registration rules, and your academic standing.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex w-full max-w-sm flex-col gap-3">
+              <Button variant="primary" className="w-full" onClick={completeStudentTutorial}>
+                Complete tutorial and enter workspace
+              </Button>
+              <p className="text-xs leading-5 text-blue-900">
+                Other student pages unlock after this required tutorial is completed.
+              </p>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -350,6 +412,7 @@ export function StudentDashboard() {
           latestRegistrarNote={graduation.latestApplication?.registrarNote}
           terminated={terminated}
           onApply={handleApplyToGraduate}
+          onDemoQualify={handleDemoQualifyForGraduation}
         />
       </div>
 
@@ -379,8 +442,6 @@ export function StudentDashboard() {
           </CardBody>
         </Card>
       </div>
-
-      <StudentComplaintPanel studentEmail={student.email} enrolledCourses={enrollment.enrolled} />
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
@@ -511,6 +572,29 @@ export function StudentDashboard() {
           </CardBody>
         </Card>
       )}
+    </div>
+  );
+}
+
+export function StudentComplaintsPage() {
+  const { user } = useAuth();
+  const student = localCollegeRepository.getStudentProfile({
+    name: user?.name ?? "Student",
+    email: user?.email ?? "",
+  });
+  const enrollment = useStudentEnrollment(student.email);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Student support</p>
+        <h1 className="mt-2 text-3xl text-slate-950">Complaints</h1>
+        <p className="mt-2 text-sm text-slate-600">
+          File a complaint with the registrar and review complaint activity tied to your classes.
+        </p>
+      </div>
+
+      <StudentComplaintPanel studentEmail={student.email} enrolledCourses={enrollment.enrolled} />
     </div>
   );
 }
@@ -656,7 +740,14 @@ function StudentComplaintPanel({
   studentEmail: string;
   enrolledCourses: ReturnType<typeof useStudentEnrollment>["enrolled"];
 }) {
-  const complaints = useComplaints().filter((complaint) => complaint.filedByEmail === studentEmail.toLowerCase());
+  const allComplaints = useComplaints();
+  const normalizedStudentEmail = studentEmail.toLowerCase();
+  const enrolledCourseIds = new Set(enrolledCourses.map((course) => course.id));
+  const filedComplaints = allComplaints.filter((complaint) => complaint.filedByEmail === normalizedStudentEmail);
+  const complaintsAgainstStudent = allComplaints.filter((complaint) => complaint.filedAgainstEmail === normalizedStudentEmail);
+  const classInstructorComplaints = allComplaints.filter(
+    (complaint) => complaint.filedAgainstRole === "instructor" && enrolledCourseIds.has(complaint.courseId),
+  );
   const [courseId, setCourseId] = useState(enrolledCourses[0]?.id ?? "");
   const [againstRole, setAgainstRole] = useState<ComplaintAgainstRole>("instructor");
   const [targetEmail, setTargetEmail] = useState("");
@@ -702,7 +793,7 @@ function StudentComplaintPanel({
             <ShieldAlert className="h-5 w-5 text-amber-700" />
             <h2 className="text-xl">Complaints</h2>
           </div>
-          <Badge variant="neutral">{complaints.length} filed</Badge>
+          <Badge variant="neutral">{filedComplaints.length} filed</Badge>
         </div>
         <p className="mt-1 text-sm text-slate-600">Ask the registrar to investigate another student or an instructor.</p>
       </CardHeader>
@@ -787,9 +878,69 @@ function StudentComplaintPanel({
           </div>
         )}
 
-        {complaints.length > 0 && (
+        {complaintsAgainstStudent.length > 0 && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-amber-950">Complaints involving you</p>
+              <Badge variant="warning">{complaintsAgainstStudent.length}</Badge>
+            </div>
+            <div className="mt-3 space-y-2">
+              {complaintsAgainstStudent.slice(0, 3).map((complaint) => (
+                <div key={complaint.id} className="rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-medium text-slate-950">{complaint.type}</span>
+                    <Badge variant={complaint.status === "resolved" ? "success" : complaint.status === "open" ? "danger" : "warning"}>
+                      {complaint.status === "under_review" ? "Under Review" : complaint.status}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-600">
+                    {complaint.courseId} - filed by {complaint.filedByRole}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-slate-700">{complaint.details}</p>
+                  {complaint.resolutionNote && (
+                    <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                      Registrar note: {complaint.resolutionNote}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {classInstructorComplaints.length > 0 && (
+          <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-blue-950">Instructor complaints in your classes</p>
+              <Badge variant="neutral">{classInstructorComplaints.length}</Badge>
+            </div>
+            <div className="mt-3 space-y-2">
+              {classInstructorComplaints.slice(0, 3).map((complaint) => (
+                <div key={complaint.id} className="rounded-2xl border border-blue-200 bg-white px-4 py-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-medium text-slate-950">{complaint.type}</span>
+                    <Badge variant={complaint.status === "resolved" ? "success" : complaint.status === "open" ? "danger" : "warning"}>
+                      {complaint.status === "under_review" ? "Under Review" : complaint.status}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-600">
+                    {complaint.courseId} - filed by {complaint.filedByEmail === normalizedStudentEmail ? "you" : "a classmate"}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-slate-700">{complaint.details}</p>
+                  {complaint.resolutionNote && (
+                    <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                      Registrar note: {complaint.resolutionNote}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {filedComplaints.length > 0 && (
           <div className="space-y-2">
-            {complaints.slice(0, 3).map((complaint) => (
+            {filedComplaints.slice(0, 3).map((complaint) => (
               <div key={complaint.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-medium text-slate-950">{complaint.type}</span>
@@ -814,6 +965,7 @@ function GraduationApplyCard({
   latestRegistrarNote,
   terminated,
   onApply,
+  onDemoQualify,
 }: {
   status: "none" | "pending" | "approved" | "rejected" | "graduated";
   passingCompletions: number;
@@ -821,6 +973,7 @@ function GraduationApplyCard({
   latestRegistrarNote?: string;
   terminated: boolean;
   onApply: () => void;
+  onDemoQualify: () => void;
 }) {
   if (status === "graduated") {
     return (
@@ -851,6 +1004,11 @@ function GraduationApplyCard({
             Your application is in the registrar's queue. {passingCompletions} of {GRADUATION_THRESHOLD} courses
             counted at submission.
           </p>
+          {latestRegistrarNote && (
+            <p className="mt-3 rounded-2xl bg-white/70 px-3 py-2 text-xs text-amber-900">
+              {latestRegistrarNote}
+            </p>
+          )}
           <p className="mt-4 text-xs uppercase tracking-[0.2em] text-amber-700">Awaiting review</p>
         </CardBody>
       </Card>
@@ -885,6 +1043,17 @@ function GraduationApplyCard({
               ? `Missing required: ${missingRequiredCourses.join(", ")}`
               : `Graduation requires exactly ${GRADUATION_THRESHOLD} passing required courses.`}
           </p>
+        )}
+        {!eligible && !terminated && (
+          <div className="mt-3 rounded-2xl border border-blue-200 bg-blue-50 px-3 py-3">
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-blue-700">Demo purposes only</p>
+            <p className="mt-1 text-xs leading-5 text-blue-900">
+              Auto-qualifies this student for the graduation workflow so the registrar review can be shown.
+            </p>
+            <Button variant="secondary" size="sm" className="mt-3 w-full" onClick={onDemoQualify}>
+              Demo qualify and submit
+            </Button>
+          </div>
         )}
         <div className="mt-4 flex items-center justify-between">
           <Badge variant={eligible ? "success" : "warning"}>

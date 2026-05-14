@@ -110,8 +110,35 @@ function moderateComment(comment: string, tabooWords: string[]) {
   return { tabooCount, displayComment };
 }
 
+function applyModeration(review: CourseReview, tabooWords = readTabooWords()): CourseReview {
+  const { tabooCount, displayComment } = moderateComment(review.rawComment, tabooWords);
+  return {
+    ...review,
+    displayComment,
+    tabooCount,
+    visibility: tabooCount >= 3 ? "hidden" : "visible",
+  };
+}
+
+function readModeratedReviews() {
+  const tabooWords = readTabooWords();
+  return readAll().map((review) => applyModeration(review, tabooWords));
+}
+
+function remoderateStoredReviews(tabooWords = readTabooWords()) {
+  const reviews = readAll().map((review) => applyModeration(review, tabooWords));
+  writeAll(reviews);
+  Array.from(new Set(reviews.map((review) => review.courseId))).forEach((courseId) => {
+    const summary = summarize(courseId);
+    if (summary.averageRating !== null) {
+      localCourseRepository.setRating(courseId, summary.averageRating);
+    }
+  });
+  return reviews;
+}
+
 function visibleForCourse(courseId: string) {
-  return readAll().filter((review) => review.courseId === courseId && review.visibility === "visible");
+  return readModeratedReviews().filter((review) => review.courseId === courseId && review.visibility === "visible");
 }
 
 function summarize(courseId: string): CourseReviewSummary {
@@ -166,6 +193,7 @@ export const localReviewsRepository = {
       new Set(words.map((word) => normalize(word)).filter(Boolean)),
     );
     writeTabooWords(next);
+    remoderateStoredReviews(next);
     return next;
   },
 
@@ -236,7 +264,7 @@ export const localReviewsRepository = {
 
   findStudentCourseReview(courseId: string, studentEmail: string): CourseReview | null {
     const target = normalize(studentEmail);
-    return readAll().find((review) => review.courseId === courseId && review.studentEmail === target) ?? null;
+    return readModeratedReviews().find((review) => review.courseId === courseId && review.studentEmail === target) ?? null;
   },
 
   listVisibleForCourse(courseId: string): VisibleCourseReview[] {
@@ -254,7 +282,7 @@ export const localReviewsRepository = {
   },
 
   listAllForRegistrar(): CourseReview[] {
-    return readAll();
+    return readModeratedReviews();
   },
 
   subscribe(callback: () => void) {

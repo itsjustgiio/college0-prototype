@@ -3,8 +3,7 @@ import { Link, Navigate, useNavigate } from "react-router";
 import { ArrowLeft, GraduationCap, LogIn } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 import { students } from "../data/mockData";
-import { useCourses } from "../hooks/useCourses";
-import { deriveInstructorEmail } from "../domain/instructor";
+import { localAuthRepository } from "../services/localAuthRepository";
 
 interface DemoAccount {
   role: string;
@@ -21,7 +20,6 @@ const roleSummaries = [
 export function Login() {
   const navigate = useNavigate();
   const { user, signIn } = useAuth();
-  const courses = useCourses();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -29,9 +27,9 @@ export function Login() {
 
   const demoAccounts: DemoAccount[] = [
     ...students.map((student) => ({ role: "Student", email: student.email, password: "student123" })),
-    ...Array.from(new Set(courses.map((course) => course.instructor))).map((instructorName) => ({
+    ...localAuthRepository.listInstructorCredentials().map((instructor) => ({
       role: "Instructor",
-      email: deriveInstructorEmail(instructorName),
+      email: instructor.email,
       password: "faculty123",
     })),
     { role: "Registrar", email: "admin@college0.edu", password: "registrar123" },

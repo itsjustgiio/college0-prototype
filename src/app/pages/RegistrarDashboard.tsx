@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, BookOpen, CheckCircle, ClipboardList, FileText, GraduationCap, Lock, MessageSquare, Plus, Save, Settings, ShieldAlert, XCircle } from "lucide-react";
+import { AlertTriangle, BookOpen, CheckCircle, ClipboardList, FileText, GraduationCap, Lock, MessageSquare, Plus, Save, Settings, ShieldAlert, Users, XCircle } from "lucide-react";
 import { Card, CardHeader, CardBody } from "../components/Card";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
@@ -20,6 +20,7 @@ import { localReviewsRepository } from "../services/localReviewsRepository";
 import { localComplaintsRepository, type ComplaintRecord, type ComplaintResolutionAction } from "../services/localComplaintsRepository";
 import { localPhaseStateRepository } from "../services/localPhaseStateRepository";
 import { localGradingRepository } from "../services/localGradingRepository";
+import { localAuthRepository } from "../services/localAuthRepository";
 import { deriveInstructorEmail } from "../domain/instructor";
 import { useAuth } from "../auth/AuthProvider";
 import { resolveStudentDisplayName } from "../domain/student";
@@ -254,6 +255,7 @@ export function RegistrarApplicationsPage() {
   const [instructorAssignments, setInstructorAssignments] = useState<Record<string, string[]>>({});
   const [decisionMessage, setDecisionMessage] = useState("");
   const [decisionError, setDecisionError] = useState("");
+  const [applicationFilter, setApplicationFilter] = useState<"all" | "students" | "instructors">("all");
   const [latestIssuedCredentials, setLatestIssuedCredentials] = useState<{
     email: string;
     studentId: string;
@@ -292,6 +294,8 @@ export function RegistrarApplicationsPage() {
     () => instructorApplications.filter((application) => application.status === "pending").length,
     [instructorApplications],
   );
+  const showStudentApplications = applicationFilter === "all" || applicationFilter === "students";
+  const showInstructorApplications = applicationFilter === "all" || applicationFilter === "instructors";
 
   const decideStudent = async (application: StudentApplication, decision: "approved" | "rejected") => {
     setDecisionMessage("");
@@ -348,6 +352,41 @@ export function RegistrarApplicationsPage() {
     }
   };
 
+  const addInstructorAssignment = (application: InstructorApplication, courseId: string) => {
+    if (!courseId) return;
+    setInstructorAssignments((current) => {
+      const currentIds = current[application.id] ?? application.assignedCourseIds ?? [];
+      if (currentIds.includes(courseId)) return current;
+      return {
+        ...current,
+        [application.id]: [...currentIds, courseId],
+      };
+    });
+  };
+
+  const removeInstructorAssignment = (application: InstructorApplication, courseId: string) => {
+    setInstructorAssignments((current) => ({
+      ...current,
+      [application.id]: (current[application.id] ?? application.assignedCourseIds ?? []).filter((id) => id !== courseId),
+    }));
+  };
+
+  const saveInstructorAssignments = async (application: InstructorApplication) => {
+    setDecisionMessage("");
+    setDecisionError("");
+
+    try {
+      await localAdmissionsRepository.updateInstructorAssignments({
+        applicationId: application.id,
+        assignedCourseIds: instructorAssignments[application.id] ?? application.assignedCourseIds ?? [],
+      });
+      setDecisionMessage(`Updated class assignments for ${application.applicantName}.`);
+      await refreshApplications();
+    } catch (error) {
+      setDecisionError(error instanceof Error ? error.message : "Unable to update instructor assignments.");
+    }
+  };
+
   const updateQuota = async () => {
     setDecisionMessage("");
     setDecisionError("");
@@ -374,6 +413,27 @@ export function RegistrarApplicationsPage() {
         title="Applications"
         description="Review student and instructor applications, apply the admissions rule, and record decisions."
       />
+
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+        {([
+          { id: "all", label: "All applications" },
+          { id: "students", label: "Students only" },
+          { id: "instructors", label: "Instructors only" },
+        ] as const).map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => setApplicationFilter(option.id)}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+              applicationFilter === option.id
+                ? "bg-slate-950 text-white"
+                : "border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
 
       {(decisionMessage || decisionError) && (
         <div className={`rounded-2xl px-4 py-3 text-sm ${
@@ -420,6 +480,7 @@ export function RegistrarApplicationsPage() {
         </Card>
       </div>
 
+      {showStudentApplications && (
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -462,7 +523,9 @@ export function RegistrarApplicationsPage() {
           </div>
         </CardBody>
       </Card>
+      )}
 
+      {showStudentApplications && (
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -546,7 +609,9 @@ export function RegistrarApplicationsPage() {
           )}
         </CardBody>
       </Card>
+      )}
 
+      {showInstructorApplications && (
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -574,51 +639,71 @@ export function RegistrarApplicationsPage() {
                     <p className="mt-1 text-sm text-slate-600">{application.subjectArea} - Applied {new Date(application.submittedAt).toLocaleDateString()}</p>
                   </div>
 
-                  {application.status === "pending" && (
+                  {(application.status === "pending" || application.status === "approved") && (
                     <div className="w-full max-w-md space-y-3">
                       <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                        <p className="text-sm font-medium text-slate-800">Assign classes before approval</p>
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                          {courseCatalog.map((course) => {
-                            const assignedCourseIds = instructorAssignments[application.id] ?? [];
-                            const checked = assignedCourseIds.includes(course.id);
-
-                            return (
-                              <label key={course.id} className="flex items-start gap-2 rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-700">
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={(event) =>
-                                    setInstructorAssignments((current) => {
-                                      const currentIds = current[application.id] ?? [];
-                                      const nextIds = event.target.checked
-                                        ? [...currentIds, course.id]
-                                        : currentIds.filter((courseId) => courseId !== course.id);
-
-                                      return {
-                                        ...current,
-                                        [application.id]: nextIds,
-                                      };
-                                    })
-                                  }
-                                  className="mt-1"
-                                />
-                                <span>
-                                  <span className="block font-medium text-slate-950">{course.id}</span>
-                                  <span className="block text-xs text-slate-500">{course.name}</span>
-                                </span>
-                              </label>
-                            );
-                          })}
+                        <p className="text-sm font-medium text-slate-800">
+                          {application.status === "approved" ? "Assigned classes" : "Assign classes before approval"}
+                        </p>
+                        <select
+                          value=""
+                          onChange={(event) => addInstructorAssignment(application, event.target.value)}
+                          className="mt-3 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                        >
+                          <option value="">Select a class to assign</option>
+                          {courseCatalog.map((course) => (
+                            <option key={course.id} value={course.id}>
+                              {course.id} - {course.name}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="mt-3 space-y-2">
+                          {((instructorAssignments[application.id] ?? application.assignedCourseIds ?? [])).length === 0 ? (
+                            <p className="rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-500">
+                              No classes selected yet.
+                            </p>
+                          ) : (
+                            (instructorAssignments[application.id] ?? application.assignedCourseIds ?? []).map((courseId) => {
+                              const course = courseCatalog.find((entry) => entry.id === courseId);
+                              return (
+                                <div key={courseId} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                                  <div>
+                                    <p className="text-sm font-medium text-slate-950">{courseId}</p>
+                                    <p className="text-xs text-slate-500">{course?.name ?? "Unknown class"}</p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeInstructorAssignment(application, courseId)}
+                                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              );
+                            })
+                          )}
                         </div>
                       </div>
                       <div className="flex flex-wrap justify-end gap-2">
-                        <Button variant="primary" size="sm" onClick={() => decideInstructor(application, "approved")}>
-                          Approve
-                        </Button>
-                        <Button variant="danger" size="sm" onClick={() => decideInstructor(application, "rejected")}>
-                          Reject
-                        </Button>
+                        {application.status === "approved" ? (
+                          <>
+                            <Button variant="primary" size="sm" onClick={() => saveInstructorAssignments(application)}>
+                              Save assignments
+                            </Button>
+                            <Button variant="danger" size="sm" onClick={() => decideInstructor(application, "rejected")}>
+                              Reverse to reject
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button variant="primary" size="sm" onClick={() => decideInstructor(application, "approved")}>
+                              Approve
+                            </Button>
+                            <Button variant="danger" size="sm" onClick={() => decideInstructor(application, "rejected")}>
+                              Reject
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
                   )}
@@ -628,6 +713,7 @@ export function RegistrarApplicationsPage() {
           )}
         </CardBody>
       </Card>
+      )}
     </div>
   );
 }
@@ -728,6 +814,11 @@ export function RegistrarGraduationPage() {
                       {subThreshold && (
                         <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                           Approval is an override below the prototype graduation threshold. A justification is required.
+                        </p>
+                      )}
+                      {application.registrarNote && (
+                        <p className="mt-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                          {application.registrarNote}
                         </p>
                       )}
                     </div>
@@ -860,6 +951,33 @@ export function RegistrarReviewsPage() {
             placeholder="Separate words with commas or new lines."
             className="min-h-32 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
           />
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-950">Active taboo words</p>
+                <p className="mt-1 text-xs text-slate-600">
+                  These are the words currently used to mask or hide student reviews.
+                </p>
+              </div>
+              <Badge variant={tabooWords.length > 0 ? "warning" : "neutral"}>
+                {tabooWords.length} active
+              </Badge>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {tabooWords.length > 0 ? (
+                tabooWords.map((word) => (
+                  <span
+                    key={word}
+                    className="rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700"
+                  >
+                    {word}
+                  </span>
+                ))
+              ) : (
+                <p className="text-sm text-slate-500">No taboo words are active.</p>
+              )}
+            </div>
+          </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-slate-600">
               1-2 matches stay visible with masking and 1 warning. 3 or more matches are hidden and issue 2 warnings.
@@ -1132,6 +1250,41 @@ const emptyNewCourse: NewCourseForm = {
   credits: "3",
 };
 
+function InstructorSelect({
+  value,
+  onChange,
+  disabled,
+  instructors,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  instructors: Array<{ name: string; email: string }>;
+}) {
+  const selectedExists = !value || instructors.some((instructor) => instructor.name === value);
+
+  return (
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      disabled={disabled}
+      className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed"
+    >
+      <option value="">Select an instructor account</option>
+      {!selectedExists && (
+        <option value={value}>
+          {value} (no matching login)
+        </option>
+      )}
+      {instructors.map((instructor) => (
+        <option key={instructor.email} value={instructor.name}>
+          {instructor.name} ({instructor.email})
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function toggleDay(days: DayOfWeek[], day: DayOfWeek): DayOfWeek[] {
   return days.includes(day) ? days.filter((entry) => entry !== day) : [...days, day];
 }
@@ -1147,6 +1300,7 @@ export function RegistrarClassSetupPage() {
   const [edits, setEdits] = useState<Record<string, Partial<CourseEditableFields>>>({});
   const [newCourse, setNewCourse] = useState<NewCourseForm>(emptyNewCourse);
   const [feedback, setFeedback] = useState<{ kind: "success" | "error"; message: string } | null>(null);
+  const instructorAccounts = localAuthRepository.listInstructorCredentials();
 
   const getDraftValue = <K extends keyof CourseEditableFields>(
     course: CourseState,
@@ -1226,7 +1380,7 @@ export function RegistrarClassSetupPage() {
     });
   };
 
-  const addCourse = () => {
+  const addCourse = (fillForWaitlistDemo = false) => {
     setFeedback(null);
     const id = newCourse.id.trim().toUpperCase();
     const name = newCourse.name.trim();
@@ -1280,8 +1434,16 @@ export function RegistrarClassSetupPage() {
 
     try {
       localCourseRepository.add({ id, name, instructor, schedule, seats, credits, rating: 0 });
+      if (fillForWaitlistDemo) {
+        localCourseRepository.fillToCapacityForDemo(id);
+      }
       setNewCourse(emptyNewCourse);
-      setFeedback({ kind: "success", message: `Course ${id} added.` });
+      setFeedback({
+        kind: "success",
+        message: fillForWaitlistDemo
+          ? `Course ${id} added and filled to capacity for waitlist demo.`
+          : `Course ${id} added.`,
+      });
     } catch (error) {
       setFeedback({ kind: "error", message: error instanceof Error ? error.message : "Add failed." });
     }
@@ -1325,6 +1487,9 @@ export function RegistrarClassSetupPage() {
             <Plus className="h-5 w-5 text-blue-700" />
             <h2 className="text-xl text-slate-950">Add a new class</h2>
           </div>
+          <p className="mt-1 text-sm text-slate-600">
+            Instructors must be selected from existing instructor login accounts so their dashboard can see assigned classes.
+          </p>
         </CardHeader>
         <CardBody>
           <fieldset disabled={!isEditable} className="space-y-4 disabled:opacity-60">
@@ -1348,11 +1513,10 @@ export function RegistrarClassSetupPage() {
               </label>
               <label className="block">
                 <span className="text-sm font-medium text-slate-700">Instructor</span>
-                <input
+                <InstructorSelect
                   value={newCourse.instructor}
-                  onChange={(event) => setNewCourse((current) => ({ ...current, instructor: event.target.value }))}
-                  placeholder="e.g. Dr. Sarah Johnson"
-                  className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed"
+                  onChange={(instructor) => setNewCourse((current) => ({ ...current, instructor }))}
+                  instructors={instructorAccounts}
                 />
               </label>
               <label className="block">
@@ -1428,8 +1592,12 @@ export function RegistrarClassSetupPage() {
               </div>
             </div>
 
-            <div className="flex justify-end">
-              <Button variant="primary" className="gap-2" onClick={addCourse} disabled={!isEditable}>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button variant="outline" className="gap-2" onClick={() => addCourse(true)} disabled={!isEditable}>
+                <Users className="h-4 w-4" />
+                Add full waitlist demo
+              </Button>
+              <Button variant="primary" className="gap-2" onClick={() => addCourse()} disabled={!isEditable}>
                 <Plus className="h-4 w-4" />
                 Add class
               </Button>
@@ -1495,10 +1663,10 @@ export function RegistrarClassSetupPage() {
                       </label>
                       <label className="block">
                         <span className="text-sm font-medium text-slate-700">Instructor</span>
-                        <input
+                        <InstructorSelect
                           value={getDraftValue(course, "instructor") ?? ""}
-                          onChange={(event) => setDraftValue(course.id, "instructor", event.target.value)}
-                          className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed"
+                          onChange={(instructor) => setDraftValue(course.id, "instructor", instructor)}
+                          instructors={instructorAccounts}
                         />
                       </label>
                       <label className="block">

@@ -393,7 +393,9 @@ export function InstructorCoursesPage() {
 export function InstructorStudentsPage() {
   const { user } = useAuth();
   const studentsList = localCollegeRepository.getInstructorRoster(user?.email ?? "");
-  const complaints = useComplaints().filter((complaint) => complaint.filedByEmail === (user?.email ?? "").toLowerCase());
+  const allComplaints = useComplaints();
+  const complaints = allComplaints.filter((complaint) => complaint.filedByEmail === (user?.email ?? "").toLowerCase());
+  const complaintsAgainstInstructor = allComplaints.filter((complaint) => complaint.filedAgainstEmail === (user?.email ?? "").toLowerCase());
   const [selectedRosterKey, setSelectedRosterKey] = useState("");
   const [complaintType, setComplaintType] = useState("Student Conduct");
   const [details, setDetails] = useState("");
@@ -483,7 +485,12 @@ export function InstructorStudentsPage() {
               <ShieldAlert className="h-5 w-5 text-amber-700" />
               <h2 className="text-xl text-slate-950">Registrar Complaints</h2>
             </div>
-            <Badge variant="neutral">{complaints.length} filed</Badge>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="neutral">{complaints.length} filed</Badge>
+              <Badge variant={complaintsAgainstInstructor.length > 0 ? "warning" : "neutral"}>
+                {complaintsAgainstInstructor.length} against you
+              </Badge>
+            </div>
           </div>
           <p className="mt-1 text-sm text-slate-600">Ask the registrar to warn or de-register a student from one of your classes.</p>
         </CardHeader>
@@ -537,6 +544,36 @@ export function InstructorStudentsPage() {
                 : "border-red-200 bg-red-50 text-red-900"
             }`}>
               {feedback.message}
+            </div>
+          )}
+
+          {complaintsAgainstInstructor.length > 0 && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium text-amber-950">Student complaints about you</p>
+                <Badge variant="warning">{complaintsAgainstInstructor.length}</Badge>
+              </div>
+              <div className="mt-3 space-y-2">
+                {complaintsAgainstInstructor.slice(0, 3).map((complaint) => (
+                  <div key={complaint.id} className="rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-medium text-slate-950">{complaint.type}</span>
+                      <Badge variant={complaint.status === "resolved" ? "success" : complaint.status === "open" ? "danger" : "warning"}>
+                        {complaint.status === "under_review" ? "Under Review" : complaint.status}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-600">
+                      {complaint.courseId} - filed by {resolveStudentDisplayName(complaint.filedByEmail)}
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-slate-700">{complaint.details}</p>
+                    {complaint.resolutionNote && (
+                      <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                        Registrar note: {complaint.resolutionNote}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

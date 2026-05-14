@@ -15,6 +15,7 @@ export function Sidebar({ role }: SidebarProps) {
     { to: "/student", icon: Home, label: "Dashboard" },
     { to: "/student/registration", icon: Calendar, label: "Registration", badge: "UC-07" },
     { to: "/student/records", icon: ClipboardList, label: "Records" },
+    { to: "/student/complaints", icon: MessageSquare, label: "Complaints" },
     { to: "/student/smart-cre", icon: Sparkles, label: "Smart CRE" },
     { to: "/student/ai-assistant", icon: MessageSquare, label: "AI Assistant", badge: "UC-17" },
   ];

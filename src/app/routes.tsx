@@ -8,7 +8,7 @@ import { Public } from "./pages/Public";
 import { NotFound } from "./pages/NotFound";
 import { Login } from "./pages/Login";
 import { ChangePassword } from "./pages/ChangePassword";
-import { StudentDashboard } from "./pages/StudentDashboard";
+import { StudentComplaintsPage, StudentDashboard } from "./pages/StudentDashboard";
 import { Registration } from "./pages/Registration";
 import { StudentRecords } from "./pages/StudentRecords";
 import {
@@ -57,6 +57,7 @@ export const router = createBrowserRouter([
               { index: true, Component: StudentDashboard },
               { path: "registration", Component: Registration },
               { path: "records", Component: StudentRecords },
+              { path: "complaints", Component: StudentComplaintsPage },
               { path: "smart-cre", Component: SmartCRE },
               { path: "ai-assistant", Component: AIAssistant },
             ],

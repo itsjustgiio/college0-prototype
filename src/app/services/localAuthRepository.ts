@@ -97,6 +97,13 @@ function readCredentials() {
 }
 
 export const localAuthRepository = {
+  listInstructorCredentials() {
+    return readCredentials()
+      .filter((credential) => credential.role === "instructor")
+      .map(({ password: _password, ...credential }) => credential)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  },
+
   getSession() {
     return readJson<AuthUser | null>(STORAGE_KEYS.session, null);
   },
@@ -280,6 +287,21 @@ export const localAuthRepository = {
     // Future Supabase handoff:
     // create a real instructor auth account here once approvals are backed by the database.
     return nextRecord;
+  },
+
+  removeInstructorCredential(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const credentials = readCredentials();
+    const nextCredentials = credentials.filter(
+      (credential) =>
+        credential.role !== "instructor" ||
+        credential.email.toLowerCase() !== normalizedEmail,
+    );
+    writeJson(STORAGE_KEYS.credentials, nextCredentials);
+    localAuthRepository.clearSessionForEmail(normalizedEmail);
+
+    // Future Supabase handoff:
+    // disable or delete the instructor auth account if an approval is reversed.
   },
 
   getRoleHome(role: UserRole) {

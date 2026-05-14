@@ -1,4 +1,4 @@
-import { courses as seedCourses } from "../data/mockData";
+import { courses as seedCourses, students as seedStudents } from "../data/mockData";
 import type { CourseSchedule } from "../domain/schedule";
 
 export interface CourseState {
@@ -20,6 +20,20 @@ export type CourseEnrollOutcome = "enrolled" | "waitlisted";
 
 const STORAGE_KEY = "college0.courses.v2";
 const CHANGE_EVENT = "college0:courses:changed";
+const DEMO_ENROLLMENT_KEY = "college0.courses.demoEnrollment.v2";
+const demoEnrollmentEmails = [
+  ...seedStudents.map((student) => student.email.toLowerCase()).filter((email) => email !== "john.doe@college0.edu"),
+  "demo.full.01@college0.edu",
+  "demo.full.02@college0.edu",
+  "demo.full.03@college0.edu",
+  "demo.full.04@college0.edu",
+  "demo.full.05@college0.edu",
+  "demo.full.06@college0.edu",
+  "demo.full.07@college0.edu",
+  "demo.full.08@college0.edu",
+  "demo.full.09@college0.edu",
+  "demo.full.10@college0.edu",
+];
 
 function hasBrowserStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -65,33 +79,95 @@ const seededCourseStates: CourseState[] = seedCourses.map((course) => ({
   name: course.name,
   instructor: course.instructor,
   schedule: seededSchedules[course.id] ?? fallbackSchedule,
-  seats: course.seats,
-  enrolledStudentIds: [],
+  seats: course.id === "CS201" ? 2 : course.seats,
+  enrolledStudentIds:
+    course.id === "BUS201"
+      ? ["mike.j@college0.edu", "lisa.a@college0.edu"]
+      : course.id === "CS201"
+        ? ["mike.j@college0.edu", "lisa.a@college0.edu"]
+        : [],
   waitlistStudentIds: [],
   rating: course.rating,
   credits: course.credits,
   cancelled: false,
 }));
 
+const waitlistExamCourse: CourseState = {
+  id: "WLE101",
+  name: "Waitlist Exam Class",
+  instructor: "Dr. Sarah Johnson",
+  schedule: { days: ["Tue", "Fri"], startMinutes: 11 * 60, endMinutes: 12 * 60 + 30 },
+  seats: 3,
+  enrolledStudentIds: [
+    "mike.j@college0.edu",
+    "lisa.a@college0.edu",
+    "tom.m@college0.edu",
+  ],
+  waitlistStudentIds: [
+    "jane.smith@college0.edu",
+    "emily.d@college0.edu",
+  ],
+  rating: 0,
+  credits: 3,
+  cancelled: false,
+};
+
+const demoSeedCourseStates = [...seededCourseStates, waitlistExamCourse];
+
+function applyDemoEnrollmentDefaults(courses: CourseState[]) {
+  return courses.map((course) => {
+    if (course.id === "BUS201") {
+      return {
+        ...course,
+        enrolledStudentIds: ["mike.j@college0.edu", "lisa.a@college0.edu"],
+        waitlistStudentIds: [],
+        cancelled: false,
+        cancelReason: undefined,
+      };
+    }
+
+    if (course.id === "CS201") {
+      return {
+        ...course,
+        seats: 2,
+        enrolledStudentIds: ["mike.j@college0.edu", "lisa.a@college0.edu"],
+        waitlistStudentIds: [],
+        cancelled: false,
+        cancelReason: undefined,
+      };
+    }
+
+    return course;
+  });
+}
+
 function ensureSeeded() {
   if (!hasBrowserStorage()) return;
 
   const stored = readJson<CourseState[] | null>(STORAGE_KEY, null);
   if (!stored) {
-    writeJson(STORAGE_KEY, seededCourseStates);
+    writeJson(STORAGE_KEY, demoSeedCourseStates);
+    window.localStorage.setItem(DEMO_ENROLLMENT_KEY, "true");
     return;
   }
 
   const storedIds = new Set(stored.map((entry) => entry.id));
-  const missing = seededCourseStates.filter((entry) => !storedIds.has(entry.id));
-  if (missing.length > 0) {
-    writeJson(STORAGE_KEY, [...stored, ...missing]);
+  const missing = demoSeedCourseStates.filter((entry) => !storedIds.has(entry.id));
+  let nextCourses = missing.length > 0 ? [...stored, ...missing] : stored;
+
+  if (!window.localStorage.getItem(DEMO_ENROLLMENT_KEY)) {
+    nextCourses = applyDemoEnrollmentDefaults(nextCourses);
+    window.localStorage.setItem(DEMO_ENROLLMENT_KEY, "true");
+  }
+
+  if (missing.length > 0 || nextCourses !== stored) {
+    writeJson(STORAGE_KEY, nextCourses);
   }
 }
 
 function readAll(): CourseState[] {
   ensureSeeded();
-  return readJson<CourseState[]>(STORAGE_KEY, seededCourseStates);
+  return readJson<CourseState[]>(STORAGE_KEY, demoSeedCourseStates);
 }
 
 function writeAll(courses: CourseState[]) {
@@ -143,6 +219,22 @@ export const localCourseRepository = {
     // Future Supabase handoff:
     // insert into a `courses` table; class setup edits flow to the same row.
     return nextCourse;
+  },
+
+  fillToCapacityForDemo(courseId: string) {
+    return mutate(courseId, (course) => {
+      const existing = new Set(course.enrolledStudentIds.map(normalizeEmail));
+      const needed = Math.max(0, course.seats - existing.size);
+      const fillers = demoEnrollmentEmails
+        .filter((email) => !existing.has(email))
+        .slice(0, needed);
+
+      return {
+        ...course,
+        enrolledStudentIds: [...course.enrolledStudentIds, ...fillers],
+        waitlistStudentIds: [],
+      };
+    });
   },
 
   enroll(courseId: string, studentEmail: string): { status: CourseEnrollOutcome; course: CourseState } {

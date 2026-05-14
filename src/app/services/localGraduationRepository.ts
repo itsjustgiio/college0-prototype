@@ -171,6 +171,35 @@ export const localGraduationRepository = {
     return application;
   },
 
+  submitDemoQualifiedApplication(email: string): GraduationApplication {
+    const target = normalize(email);
+    const existing = localGraduationRepository.findActivePendingForStudent(target);
+    if (existing) return existing;
+
+    const passingCourses = REQUIRED_GRADUATION_COURSE_IDS.map((courseId) => {
+      const course = localCourseRepository.get(courseId);
+      return {
+        id: courseId,
+        name: course?.name ?? courseId,
+        grade: "A",
+        semester: "Demo Qualification",
+        credits: course?.credits ?? 3,
+      };
+    });
+
+    const application: GraduationApplication = {
+      id: createId(),
+      studentEmail: target,
+      submittedAt: new Date().toISOString(),
+      status: "pending",
+      passingCompletionsAtSubmission: GRADUATION_THRESHOLD,
+      passingCoursesAtSubmission: passingCourses,
+      registrarNote: "DEMO PURPOSES ONLY: graduation qualification was auto-filled for presentation.",
+    };
+    writeAll([application, ...readAll()]);
+    return application;
+  },
+
   approveApplication(input: { applicationId: string; reviewerEmail: string; registrarNote?: string }): GraduationApplication {
     const all = readAll();
     const target = all.find((entry) => entry.id === input.applicationId);
@@ -189,7 +218,7 @@ export const localGraduationRepository = {
       status: "approved",
       reviewedAt: new Date().toISOString(),
       reviewedBy: normalize(input.reviewerEmail),
-      registrarNote: note || undefined,
+      registrarNote: note || target.registrarNote,
     };
     writeAll(all.map((entry) => (entry.id === target.id ? reviewed : entry)));
     localPhaseStateRepository.markGraduated(target.studentEmail);

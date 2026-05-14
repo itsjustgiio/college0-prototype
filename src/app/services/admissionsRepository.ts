@@ -37,6 +37,10 @@ export interface AdmissionsRepository {
       temporaryPassword: string;
     };
   }>;
+  updateInstructorAssignments(input: {
+    applicationId: string;
+    assignedCourseIds: string[];
+  }): Promise<InstructorApplication>;
 }
 
 // Future Supabase implementation can satisfy this contract without changing page components.

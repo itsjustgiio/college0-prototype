@@ -299,12 +299,18 @@ export const localAdmissionsRepository: AdmissionsRepository = {
       throw new Error("Assign at least one class before approving an instructor.");
     }
 
+    const previousStatus = application.status;
+    const temporaryPassword =
+      input.decision === "approved"
+        ? application.issuedTemporaryPassword ?? createTemporaryPassword()
+        : undefined;
     const reviewedApplication: InstructorApplication = {
       ...application,
       status: input.decision,
       registrarDecision: input.decision,
       reviewedAt: nowIsoDate(),
       assignedCourseIds: input.decision === "approved" ? input.assignedCourseIds ?? [] : [],
+      issuedTemporaryPassword: temporaryPassword,
     };
 
     const nextApplications = applications.map((entry) =>
@@ -313,8 +319,6 @@ export const localAdmissionsRepository: AdmissionsRepository = {
     writeJson(STORAGE_KEYS.instructorApplications, nextApplications);
 
     if (input.decision === "approved") {
-      const temporaryPassword = createTemporaryPassword();
-      reviewedApplication.issuedTemporaryPassword = temporaryPassword;
       localAuthRepository.upsertAcceptedInstructorCredential({
         id: `accepted-${reviewedApplication.id}`,
         name: reviewedApplication.applicantName,
@@ -335,10 +339,47 @@ export const localAdmissionsRepository: AdmissionsRepository = {
       };
     }
 
+    if (input.decision === "rejected" && previousStatus === "approved") {
+      localAuthRepository.removeInstructorCredential(reviewedApplication.email);
+      localCollegeRepository.removeInstructorAssignments(reviewedApplication.email);
+    }
+
     // Future Supabase handoff:
     // update `instructor_applications` and create class assignments for approved instructors.
     return {
       application: reviewedApplication,
     };
+  },
+
+  async updateInstructorAssignments(input: {
+    applicationId: string;
+    assignedCourseIds: string[];
+  }) {
+    const applications = readInstructorApplications();
+    const application = applications.find((entry) => entry.id === input.applicationId);
+
+    if (!application) {
+      throw new Error("Instructor application not found.");
+    }
+
+    if (application.status !== "approved") {
+      throw new Error("Only approved instructor applications can have active class assignments.");
+    }
+
+    const reviewedApplication: InstructorApplication = {
+      ...application,
+      assignedCourseIds: input.assignedCourseIds,
+    };
+
+    writeJson(
+      STORAGE_KEYS.instructorApplications,
+      applications.map((entry) => (entry.id === reviewedApplication.id ? reviewedApplication : entry)),
+    );
+    localCollegeRepository.upsertInstructorAssignments({
+      email: reviewedApplication.email,
+      assignedCourseIds: input.assignedCourseIds,
+    });
+
+    return reviewedApplication;
   },
 };
